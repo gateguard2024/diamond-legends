@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Check, Crosshair, Pencil, Target, TrendingDown, TrendingUp, Trophy, X } from 'lucide-react';
-import { Goal, MetricId, PlayerId, Session } from '@/lib/types';
+import { Goal, MetricId, Phase, PlayerId, Session } from '@/lib/types';
 import {
   GOAL_GAIN_PCT,
   METRIC_BY_ID,
@@ -75,7 +75,7 @@ function GoalRow({
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
           <div className={`text-[10px] font-black tracking-wider ${def.text}`}>{def.short}</div>
-          <div className="text-[9px] text-sky-700 font-bold">{def.phase}</div>
+          <div className="text-[9px] text-sky-700 font-bold">{def.phaseLabel}</div>
         </div>
         {gp.best !== null && (
           <div
@@ -201,14 +201,20 @@ export default function GoalsPanel({
   playerId,
   sessions,
   goals,
+  phase,
   onSetGoal,
 }: {
   playerId: PlayerId;
   sessions: Session[];
   goals: Goal[];
+  /** Show only this phase's metrics. Habit metrics show on every tab. */
+  phase?: Phase;
   onSetGoal: (metric: MetricId, target: number) => void;
 }) {
   const cleared = achievedGoals(goals, playerId);
+  const shown = phase
+    ? METRICS.filter((m) => m.phase === phase || m.phase === 'habit')
+    : METRICS;
 
   return (
     <div className="p-4 sm:p-5 bg-sky-950/40 rounded-2xl border border-sky-900">
@@ -222,7 +228,7 @@ export default function GoalsPanel({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        {METRICS.map((def) => (
+        {shown.map((def) => (
           <GoalRow
             key={def.id}
             def={def}

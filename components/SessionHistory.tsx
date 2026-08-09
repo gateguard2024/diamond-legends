@@ -4,7 +4,7 @@ import React from 'react';
 import { Clock3, Trash2 } from 'lucide-react';
 import { PLAYERS } from '@/lib/players';
 import { Session } from '@/lib/types';
-import { fieldingRepTotal } from '@/lib/gamification';
+import { chancesFor } from '@/lib/fielding';
 
 export default function SessionHistory({
   sessions,
@@ -50,7 +50,9 @@ export default function SessionHistory({
                       : '—'}
                   </td>
                   <td className="py-2.5 pr-3 text-sky-400 whitespace-nowrap">
-                    {s.fielding ? `${fieldingRepTotal(s)} reps · ${s.fielding.cleanReps} clean` : '—'}
+                    {s.fielding
+                      ? `${s.fielding.cleanReps}/${chancesFor(s.fielding)} caught · ${s.fielding.throwsAccurate ?? 0}/${s.fielding.throwsMade ?? 0} on target`
+                      : '—'}
                   </td>
                   <td className="py-2.5 pr-3 text-sky-400 whitespace-nowrap">
                     {s.hitting

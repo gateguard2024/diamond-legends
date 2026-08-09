@@ -2,73 +2,28 @@
 
 import React, { useState } from 'react';
 import { Loader2, Shield, Target, X, Zap } from 'lucide-react';
-import { Player, Session, Swing } from '@/lib/types';
+import { FieldingRep, Pitch, Player, Session, Swing } from '@/lib/types';
 import { displayName } from '@/lib/players';
 import { hittingFromSwings, isSwingFilled } from '@/lib/swings';
+import { pitchingFromLog } from '@/lib/pitches';
+import { fieldingFromReps, isRepFilled } from '@/lib/fielding';
 import SwingLogger from './SwingLogger';
+import PitchLogger from './PitchLogger';
+import FieldingLogger from './FieldingLogger';
 
 type Draft = Omit<Session, 'id' | 'xpEarned'>;
+type Tab = 'batting' | 'pitching' | 'fielding';
 
-const num = (v: string) => (v === '' ? 0 : Number(v));
-
-function Field({
-  label,
-  value,
-  onChange,
-  step = '1',
-  hint,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  step?: string;
-  hint?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[10px] font-bold text-sky-500 tracking-wider block mb-1 leading-tight">
-        {label}
-      </span>
-      <input
-        type="number"
-        step={step}
-        inputMode="decimal"
-        value={value}
-        placeholder="0"
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-slate-950 border border-sky-800 rounded-lg px-3 py-2 text-white font-bold text-base focus:outline-none focus:border-sky-400"
-      />
-      {hint && <span className="text-[9px] text-sky-700 block mt-0.5">{hint}</span>}
-    </label>
-  );
-}
-
-function Toggle({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-xs font-black tracking-wider transition ${
-        active
-          ? 'bg-sky-900/70 border-sky-500 text-white'
-          : 'bg-slate-950 border-slate-800 text-slate-500'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
+const TABS: { id: Tab; label: string; icon: React.ReactNode; accent: string }[] = [
+  { id: 'batting', label: 'BATTING', icon: <Zap className="w-4 h-4" />, accent: 'text-yellow-300' },
+  {
+    id: 'pitching',
+    label: 'PITCHING',
+    icon: <Target className="w-4 h-4" />,
+    accent: 'text-orange-300',
+  },
+  { id: 'fielding', label: 'FIELDING', icon: <Shield className="w-4 h-4" />, accent: 'text-sky-300' },
+];
 
 export default function LogSessionModal({
   player,
@@ -81,51 +36,33 @@ export default function LogSessionModal({
   onClose: () => void;
   onSave: (draft: Draft) => void;
 }) {
+  const [tab, setTab] = useState<Tab>('batting');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
-  const [usePitching, setUsePitching] = useState(true);
-  const [useFielding, setUseFielding] = useState(true);
-  const [useHitting, setUseHitting] = useState(true);
 
-  const [p, setP] = useState({ totalPitches: '', strikes: '', avgSpeed: '', topSpeed: '' });
-  const [f, setF] = useState({
-    popFlies: '',
-    frontGrounders: '',
-    backhand: '',
-    gloveSide: '',
-    gloveSideTurns: '',
-    backhandTurns: '',
-    cleanReps: '',
-  });
   const [swings, setSwings] = useState<Swing[]>([]);
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [pitches, setPitches] = useState<Pitch[]>([]);
+  const [reps, setReps] = useState<FieldingRep[]>([]);
+
+  const filledSwings = swings.filter(isSwingFilled).length;
+  const filledReps = reps.filter(isRepFilled).length;
+  const counts: Record<Tab, number> = {
+    batting: filledSwings,
+    pitching: pitches.length,
+    fielding: filledReps,
+  };
+
+  const nothingLogged = filledSwings === 0 && pitches.length === 0 && filledReps === 0;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const draft: Draft = { playerId: player.id, date, notes: notes.trim() || undefined };
+    if (nothingLogged) return;
 
-    if (usePitching) {
-      draft.pitching = {
-        totalPitches: num(p.totalPitches),
-        strikes: Math.min(num(p.strikes), num(p.totalPitches) || num(p.strikes)),
-        avgSpeed: num(p.avgSpeed),
-        topSpeed: num(p.topSpeed),
-      };
-    }
-    if (useFielding) {
-      draft.fielding = {
-        popFlies: num(f.popFlies),
-        frontGrounders: num(f.frontGrounders),
-        backhand: num(f.backhand),
-        gloveSide: num(f.gloveSide),
-        gloveSideTurns: num(f.gloveSideTurns),
-        backhandTurns: num(f.backhandTurns),
-        cleanReps: num(f.cleanReps),
-      };
-    }
-    if (useHitting && swings.some(isSwingFilled)) {
-      draft.hitting = hittingFromSwings(swings);
-    }
+    const draft: Draft = { playerId: player.id, date, notes: notes.trim() || undefined };
+    if (filledSwings > 0) draft.hitting = hittingFromSwings(swings);
+    if (pitches.length > 0) draft.pitching = pitchingFromLog(pitches);
+    if (filledReps > 0) draft.fielding = fieldingFromReps(reps);
 
     onSave(draft);
   };
@@ -134,22 +71,33 @@ export default function LogSessionModal({
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 overflow-y-auto">
       <form
         onSubmit={submit}
-        className="bg-slate-900 border border-sky-800 rounded-3xl w-full max-w-3xl my-4 animate-slideUp"
+        className="bg-slate-900 border border-sky-800 rounded-3xl w-full max-w-4xl my-4 animate-slideUp"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-sky-900 sticky top-0 bg-slate-900 rounded-t-3xl z-10">
+        <div className="flex items-center justify-between p-5 border-b border-sky-900 sticky top-0 bg-slate-900 rounded-t-3xl z-30">
           <div>
             <h2 className="text-xl font-black text-white">LOG WORKOUT</h2>
             <p className="text-xs text-sky-400 font-medium">{displayName(player)}</p>
           </div>
-          <button type="button" onClick={onClose} className="text-sky-500 hover:text-white p-1">
-            <X />
-          </button>
+          <div className="flex items-center gap-3">
+            <label className="hidden sm:block">
+              <span className="text-[9px] font-bold text-sky-600 tracking-wider block">DATE</span>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="bg-slate-950 border border-sky-800 rounded-lg px-2 py-1.5 text-white font-bold text-sm focus:outline-none focus:border-sky-400"
+              />
+            </label>
+            <button type="button" onClick={onClose} className="text-sky-500 hover:text-white p-1">
+              <X />
+            </button>
+          </div>
         </div>
 
-        <div className="p-5 space-y-5">
-          {/* Date */}
-          <label className="block">
+        <div className="p-5 space-y-4">
+          {/* Date on mobile */}
+          <label className="block sm:hidden">
             <span className="text-[10px] font-bold text-sky-500 tracking-wider block mb-1">
               SESSION DATE
             </span>
@@ -157,116 +105,45 @@ export default function LogSessionModal({
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full sm:w-56 bg-slate-950 border border-sky-800 rounded-lg px-3 py-2 text-white font-bold focus:outline-none focus:border-sky-400"
+              className="w-full bg-slate-950 border border-sky-800 rounded-lg px-3 py-2 text-white font-bold focus:outline-none focus:border-sky-400"
             />
           </label>
 
-          {/* Which phases */}
-          <div className="flex gap-2">
-            <Toggle
-              active={usePitching}
-              onClick={() => setUsePitching((v) => !v)}
-              icon={<Target className="w-4 h-4" />}
-              label="PITCHING"
-            />
-            <Toggle
-              active={useFielding}
-              onClick={() => setUseFielding((v) => !v)}
-              icon={<Shield className="w-4 h-4" />}
-              label="FIELDING"
-            />
-            <Toggle
-              active={useHitting}
-              onClick={() => setUseHitting((v) => !v)}
-              icon={<Zap className="w-4 h-4" />}
-              label="HITTING"
-            />
+          {/* Tabs */}
+          <div className="flex gap-1.5 border-b border-sky-900">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs font-black tracking-wider rounded-t-lg border-b-2 transition ${
+                  tab === t.id
+                    ? `border-current ${t.accent} bg-sky-950/50`
+                    : 'border-transparent text-slate-600 hover:text-sky-400'
+                }`}
+              >
+                {t.icon}
+                <span className="hidden sm:inline">{t.label}</span>
+                {counts[t.id] > 0 && (
+                  <span className="bg-sky-800 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                    {counts[t.id]}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
 
-          {/* Pitching */}
-          {usePitching && (
-            <fieldset className="bg-sky-950/40 border border-sky-900 rounded-2xl p-4">
-              <legend className="text-xs font-black text-orange-300 tracking-wider px-2">
-                PITCHING
-              </legend>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Field
-                  label="TOTAL PITCHES"
-                  value={p.totalPitches}
-                  onChange={(v) => setP({ ...p, totalPitches: v })}
-                />
-                <Field label="STRIKES" value={p.strikes} onChange={(v) => setP({ ...p, strikes: v })} />
-                <Field
-                  label="AVG SPEED (MPH)"
-                  value={p.avgSpeed}
-                  onChange={(v) => setP({ ...p, avgSpeed: v })}
-                  step="0.1"
-                  hint="Average of the session"
-                />
-                <Field
-                  label="TOP SPEED (MPH)"
-                  value={p.topSpeed}
-                  onChange={(v) => setP({ ...p, topSpeed: v })}
-                  step="0.1"
-                  hint="Fastest pitch"
-                />
-              </div>
-            </fieldset>
+          {/* Panels */}
+          {tab === 'batting' && (
+            <SwingLogger
+              swings={swings}
+              onChange={setSwings}
+              showAll={showAllColumns}
+              onToggleColumns={() => setShowAllColumns((v) => !v)}
+            />
           )}
-
-          {/* Fielding */}
-          {useFielding && (
-            <fieldset className="bg-sky-950/40 border border-sky-900 rounded-2xl p-4">
-              <legend className="text-xs font-black text-sky-300 tracking-wider px-2">
-                FIELDING REPS
-              </legend>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Field label="POP FLIES" value={f.popFlies} onChange={(v) => setF({ ...f, popFlies: v })} />
-                <Field
-                  label="FRONT GROUNDERS"
-                  value={f.frontGrounders}
-                  onChange={(v) => setF({ ...f, frontGrounders: v })}
-                />
-                <Field label="BACKHAND" value={f.backhand} onChange={(v) => setF({ ...f, backhand: v })} />
-                <Field
-                  label="GLOVE SIDE"
-                  value={f.gloveSide}
-                  onChange={(v) => setF({ ...f, gloveSide: v })}
-                />
-                <Field
-                  label="GLOVE SIDE TURNS"
-                  value={f.gloveSideTurns}
-                  onChange={(v) => setF({ ...f, gloveSideTurns: v })}
-                />
-                <Field
-                  label="BACKHAND TURNS"
-                  value={f.backhandTurns}
-                  onChange={(v) => setF({ ...f, backhandTurns: v })}
-                />
-                <Field
-                  label="CLEAN REPS"
-                  value={f.cleanReps}
-                  onChange={(v) => setF({ ...f, cleanReps: v })}
-                  hint="Reps fielded cleanly"
-                />
-              </div>
-            </fieldset>
-          )}
-
-          {/* Hitting / Blast — swing by swing */}
-          {useHitting && (
-            <fieldset className="bg-sky-950/40 border border-sky-900 rounded-2xl p-4">
-              <legend className="text-xs font-black text-yellow-300 tracking-wider px-2">
-                HITTING — BLAST MOTION, SWING BY SWING
-              </legend>
-              <SwingLogger
-                swings={swings}
-                onChange={setSwings}
-                showAll={showAllColumns}
-                onToggleColumns={() => setShowAllColumns((v) => !v)}
-              />
-            </fieldset>
-          )}
+          {tab === 'pitching' && <PitchLogger pitches={pitches} onChange={setPitches} />}
+          {tab === 'fielding' && <FieldingLogger reps={reps} onChange={setReps} />}
 
           {/* Notes */}
           <label className="block">
@@ -284,7 +161,7 @@ export default function LogSessionModal({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 p-5 border-t border-sky-900 sticky bottom-0 bg-slate-900 rounded-b-3xl">
+        <div className="flex items-center gap-3 p-5 border-t border-sky-900 sticky bottom-0 bg-slate-900 rounded-b-3xl">
           <button
             type="button"
             onClick={onClose}
@@ -293,10 +170,14 @@ export default function LogSessionModal({
           >
             Cancel
           </button>
+          <span className="text-[10px] font-bold text-sky-600 hidden sm:block">
+            {filledSwings} swings · {pitches.length} pitches · {filledReps} drill lines
+          </span>
           <button
             type="submit"
-            disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-300 text-slate-950 font-black tracking-wide py-3 rounded-xl hover:brightness-110 disabled:opacity-60"
+            disabled={saving || nothingLogged}
+            title={nothingLogged ? 'Log at least one swing, pitch, or drill line' : undefined}
+            className="ml-auto flex-1 sm:flex-none sm:min-w-[15rem] flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-300 text-slate-950 font-black tracking-wide py-3 px-6 rounded-xl hover:brightness-110 disabled:opacity-40"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             {saving ? 'SAVING…' : 'SAVE & EARN XP'}

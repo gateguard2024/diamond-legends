@@ -1,11 +1,21 @@
 'use client';
 
 import React, { useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Cloud, Download, HardDrive, Loader2, Trophy, Upload } from 'lucide-react';
+import {
+  AlertTriangle,
+  Cloud,
+  Download,
+  HardDrive,
+  HelpCircle,
+  Loader2,
+  Trophy,
+  Upload,
+} from 'lucide-react';
 import PlayerCard from '@/components/PlayerCard';
 import LogSessionModal from '@/components/LogSessionModal';
 import SessionHistory from '@/components/SessionHistory';
 import CelebrationModal from '@/components/CelebrationModal';
+import PointsExplainer from '@/components/PointsExplainer';
 import { PLAYER_ORDER } from '@/lib/players';
 import { useAppData, SaveResult } from '@/lib/useAppData';
 import { levelFromXP, totalXP } from '@/lib/gamification';
@@ -32,6 +42,7 @@ export default function DiamondLegendsDashboard() {
     null,
   );
   const [saving, setSaving] = useState(false);
+  const [showPoints, setShowPoints] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -137,6 +148,13 @@ export default function DiamondLegendsDashboard() {
               {leader.xp.toLocaleString()} XP
             </div>
           )}
+          <button
+            onClick={() => setShowPoints(true)}
+            title="How XP and levels are calculated — built to show the kids"
+            className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 px-3 py-2 rounded-xl text-xs font-bold"
+          >
+            <HelpCircle className="w-4 h-4" /> How Points Work
+          </button>
           <button
             onClick={exportJSON}
             title="Download a backup of all sessions"
@@ -247,6 +265,8 @@ export default function DiamondLegendsDashboard() {
           onSave={handleSave}
         />
       )}
+
+      {showPoints && <PointsExplainer onClose={() => setShowPoints(false)} />}
 
       {celebrating && (
         <CelebrationModal

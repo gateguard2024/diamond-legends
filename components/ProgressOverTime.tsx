@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Activity } from 'lucide-react';
-import { Goal, PlayerId, Session } from '@/lib/types';
+import { Goal, Phase, PlayerId, Session } from '@/lib/types';
 import { METRICS, activeGoal, currentValue, metricSeries, personalBest } from '@/lib/goals';
 import { LineChart } from './ui';
 
@@ -14,6 +14,7 @@ const STROKE: Record<string, string> = {
   batSpeed: '#facc15',
   onPlaneEfficiency: '#a3e635',
   cleanPct: '#38bdf8',
+  throwAccuracy: '#2dd4bf',
   workoutsPerWeek: '#a78bfa',
 };
 
@@ -24,6 +25,7 @@ const FILL: Record<string, string> = {
   batSpeed: 'rgba(250,204,21,0.16)',
   onPlaneEfficiency: 'rgba(163,230,53,0.16)',
   cleanPct: 'rgba(56,189,248,0.16)',
+  throwAccuracy: 'rgba(45,212,191,0.16)',
   workoutsPerWeek: 'rgba(167,139,250,0.16)',
 };
 
@@ -31,13 +33,26 @@ export default function ProgressOverTime({
   playerId,
   sessions,
   goals,
+  phase,
 }: {
   playerId: PlayerId;
   sessions: Session[];
   goals: Goal[];
+  /** Restrict the metric picker to one phase (plus habit metrics). */
+  phase?: Phase;
 }) {
-  const [metricId, setMetricId] = useState(METRICS[0].id);
-  const def = METRICS.find((m) => m.id === metricId)!;
+  const shown = useMemo(
+    () => (phase ? METRICS.filter((m) => m.phase === phase || m.phase === 'habit') : METRICS),
+    [phase],
+  );
+
+  const [metricId, setMetricId] = useState(shown[0].id);
+  const def = shown.find((m) => m.id === metricId) ?? shown[0];
+
+  // Switching tabs can leave a metric selected that isn't in the new list.
+  useEffect(() => {
+    if (!shown.some((m) => m.id === metricId)) setMetricId(shown[0].id);
+  }, [shown, metricId]);
 
   const series = metricSeries(def, sessions);
   const goal = activeGoal(goals, playerId, def.id);
@@ -56,7 +71,7 @@ export default function ProgressOverTime({
 
       {/* Metric picker */}
       <div className="flex flex-wrap gap-1.5 mb-4">
-        {METRICS.map((m) => (
+        {shown.map((m) => (
           <button
             key={m.id}
             onClick={() => setMetricId(m.id)}

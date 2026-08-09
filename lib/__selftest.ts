@@ -4,10 +4,27 @@
  *   npx tsc lib/__selftest.ts --outDir /tmp/dltest --module commonjs \
  *     --target es2020 --esModuleInterop --skipLibCheck && node /tmp/dltest/lib/__selftest.js
  */
-import { Session, Swing } from './types';
+import { FieldingRep, Pitch, PitchType, Session, Swing } from './types';
+import {
+  averageSpeed,
+  longestStrikeRun,
+  pitchingFromLog,
+  strikePct as pitchStrikePct,
+  strikePctByType,
+  topSpeed as pitchTopSpeed,
+} from './pitches';
+import { chancesFor, fieldingFromReps } from './fielding';
+import { aaaProgress, aaaReadiness, gapToAAA, levelFor, BENCHMARK_BY_METRIC } from './benchmarks';
+import { coachFor } from './coaching';
 import { averageMetric, bestMetric, emptySwing, hittingFromSwings, isSwingFilled } from './swings';
 import { applyProfiles, displayName } from './players';
-import { computeTotals, detectPersonalBests, levelFromXP, xpForSession } from './gamification';
+import {
+  computeTotals,
+  detectPersonalBests,
+  emptyTotals,
+  levelFromXP,
+  xpForSession,
+} from './gamification';
 import {
   METRIC_BY_ID,
   currentValue,
@@ -30,6 +47,13 @@ const mk = (date: string, strikes: number, pitches: number, avg: number, top: nu
   date,
   pitching: { totalPitches: pitches, strikes, avgSpeed: avg, topSpeed: top },
   xpEarned: 0,
+});
+
+const pitch = (id: string, speed: number, strike: boolean, type: PitchType = 'FB'): Pitch => ({
+  id,
+  speed,
+  strike,
+  type,
 });
 
 // Six sessions, strike% = 50,60,70,80,90,40
@@ -170,6 +194,155 @@ check('profile overrides slogan', edited.austin.slogan, 'The Hammer');
 check('display name uses slogan', displayName(edited.austin), "AUSTIN 'THE HAMMER'");
 check('untouched player keeps defaults', edited.carl.number, 7);
 check('empty slogan falls back to plain name', displayName({ ...edited.carl, slogan: '' }), 'CARL');
+
+// ---------------------------------------------------------------------------
+// Pitch-by-pitch logging
+// ---------------------------------------------------------------------------
+
+const pitchLog: Pitch[] = [
+  pitch('p1', 42, true),
+  pitch('p2', 44, true),
+  pitch('p3', 0, false), // not gunned, still counts as a ball
+  pitch('p4', 46, true),
+  pitch('p5', 40, false, 'CH'),
+  pitch('p6', 0, false, 'CH'),
+];
+
+check('pitch count includes ungunned pitches', pitchingFromLog(pitchLog).totalPitches, 6);
+check('strike count', pitchingFromLog(pitchLog).strikes, 3);
+check('strike pct', pitchStrikePct(pitchLog), 50);
+check('avg velo skips ungunned pitches', averageSpeed(pitchLog), 43); // (42+44+46+40)/4
+check('top velo', pitchTopSpeed(pitchLog), 46);
+check('longest strike run', longestStrikeRun(pitchLog), 2);
+check('longest run with no strikes', longestStrikeRun([pitch('x', 40, false)]), 0);
+
+const byType = strikePctByType(pitchLog);
+check('splits by pitch type', byType.length, 2);
+check('changeup strike rate', byType.find((t) => t.type === 'CH')?.strikePct, 0);
+
+// ---------------------------------------------------------------------------
+// Fielding rep logging
+// ---------------------------------------------------------------------------
+
+const repLog: FieldingRep[] = [
+  { id: 'r1', drill: 'frontGrounders', thrown: 20, caught: 18, throwsMade: 18, throwsAccurate: 15 },
+  { id: 'r2', drill: 'backhand', thrown: 10, caught: 6, throwsMade: 6, throwsAccurate: 4 },
+  { id: 'r3', drill: 'popFlies', thrown: 0, caught: 0, throwsMade: 0, throwsAccurate: 0 }, // blank
+];
+
+const fielding = fieldingFromReps(repLog);
+check('blank drill lines are dropped', fielding.repLog?.length, 2);
+check('total chances', fielding.chances, 30);
+check('total caught', fielding.cleanReps, 24);
+check('per-drill counts roll up', fielding.frontGrounders, 20);
+check('throws made', fielding.throwsMade, 24);
+check('throws accurate', fielding.throwsAccurate, 19);
+check('chancesFor reads the new field', chancesFor(fielding), 30);
+
+// Caught can never exceed chances even if mis-entered
+const overCaught = fieldingFromReps([
+  { id: 'r4', drill: 'gloveSide', thrown: 5, caught: 99, throwsMade: 5, throwsAccurate: 99 },
+]);
+check('caught is capped at chances', overCaught.cleanReps, 5);
+check('accurate throws capped at throws made', overCaught.throwsAccurate, 5);
+
+// Legacy sessions without `chances` still resolve
+check(
+  'legacy fielding falls back to drill totals',
+  chancesFor({
+    popFlies: 5,
+    frontGrounders: 10,
+    backhand: 0,
+    gloveSide: 0,
+    gloveSideTurns: 0,
+    backhandTurns: 0,
+    cleanReps: 12,
+    chances: 0,
+    throwsMade: 0,
+    throwsAccurate: 0,
+  }),
+  15,
+);
+
+// Career totals pick up the new fielding fields
+const fieldSession: Session = {
+  id: 'f1',
+  playerId: 'carl',
+  date: '2026-08-09',
+  fielding,
+  xpEarned: 0,
+};
+const fieldTotals = computeTotals([fieldSession]);
+check('career catch %', fieldTotals.catchPct, 80); // 24/30
+check('career throw accuracy', fieldTotals.throwAccuracy, 79); // 19/24
+
+// ---------------------------------------------------------------------------
+// AAA benchmarks
+// ---------------------------------------------------------------------------
+
+const catchB = BENCHMARK_BY_METRIC.cleanPct!;
+check('level below rec is null', levelFor(catchB, 50), null);
+check('level at rec', levelFor(catchB, 72), 'rec');
+check('level at aa', levelFor(catchB, 82), 'aa');
+check('level at aaa', levelFor(catchB, 89), 'aaa');
+check('level at elite', levelFor(catchB, 95), 'elite');
+check('gap to aaa', gapToAAA(catchB, 80), 8);
+check('gap is zero once cleared', gapToAAA(catchB, 90), 0);
+check('progress caps at 1', aaaProgress(catchB, 95), 1);
+check('progress is zero at the floor', aaaProgress(catchB, 10), 0);
+
+const readiness = aaaReadiness({ cleanPct: 88, throwAccuracy: 85, batSpeed: null });
+check('readiness ignores metrics with no data', readiness.tracked, 2);
+check('readiness at aaa scores 100', readiness.score, 100);
+check('readiness counts cleared metrics', readiness.atOrAboveAAA, 2);
+check('empty readiness is zero', aaaReadiness({}).score, 0);
+
+// ---------------------------------------------------------------------------
+// Coaching engine
+// ---------------------------------------------------------------------------
+
+const coachInput = {
+  lastSession: fieldSession,
+  current: { cleanPct: 80, throwAccuracy: 79 },
+  previous: { cleanPct: 84, throwAccuracy: 79 },
+  totals: fieldTotals,
+  sessions: [fieldSession],
+};
+
+const fieldingTips = coachFor('fielding', coachInput);
+check('coaching returns suggestions', fieldingTips.length > 0, true);
+check('suggestions are sorted by priority', fieldingTips[0].priority >= fieldingTips[fieldingTips.length - 1].priority, true);
+check('flags the below-AAA catch rate', fieldingTips.some((t) => t.id === 'field-catch'), true);
+check('flags the weakest drill', fieldingTips.some((t) => t.id.startsWith('field-drill-')), true);
+check('no coaching without sessions', coachFor('fielding', { ...coachInput, sessions: [] }).length, 0);
+
+// A high pitch count outranks everything else
+const highCount: Session = {
+  id: 'hp',
+  playerId: 'carl',
+  date: '2026-08-09',
+  pitching: pitchingFromLog(Array.from({ length: 90 }, (_, i) => pitch(`h${i}`, 42, i % 2 === 0))),
+  xpEarned: 0,
+};
+const pitchTips = coachFor('pitching', {
+  lastSession: highCount,
+  current: { strikePct: 50, avgSpeed: 42 },
+  previous: {},
+  totals: computeTotals([highCount]),
+  sessions: [highCount],
+});
+check('pitch-count safety warning is top priority', pitchTips[0].id, 'pitch-count');
+check('safety suggestion is tagged SAFETY', pitchTips[0].tag, 'SAFETY');
+
+// Everything at elite level should produce maintenance advice, not alarms
+const eliteTips = coachFor('batting', {
+  lastSession: undefined,
+  current: { batSpeed: 55, onPlaneEfficiency: 85 },
+  previous: { batSpeed: 55, onPlaneEfficiency: 85 },
+  totals: emptyTotals(),
+  sessions: [fieldSession],
+});
+check('elite numbers get maintenance advice', eliteTips[0].id, 'bat-maintain');
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
 if (failures > 0 && typeof process !== 'undefined') process.exitCode = 1;

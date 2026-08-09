@@ -31,11 +31,44 @@ export interface PlayerProfile {
 
 // --- Session sub-records --------------------------------------------------
 
+export type PitchType = 'FB' | 'CH' | 'CB' | 'OTHER';
+
+/** One pitch, logged line by line. */
+export interface Pitch {
+  id: string;
+  speed: number; // mph — 0 if not gunned
+  strike: boolean;
+  type: PitchType;
+}
+
 export interface PitchingEntry {
   totalPitches: number;
   strikes: number;
   avgSpeed: number; // mph — average of every pitch that got gunned
   topSpeed: number; // mph — fastest pitch of the session
+  /** Every pitch thrown in the session. */
+  pitchLog?: Pitch[];
+}
+
+export type DrillId =
+  | 'popFlies'
+  | 'frontGrounders'
+  | 'backhand'
+  | 'gloveSide'
+  | 'gloveSideTurns'
+  | 'backhandTurns';
+
+/**
+ * One line of fielding work: a drill, how many balls were sent at him, how
+ * many he caught/fielded cleanly, and how his throws to the bag went.
+ */
+export interface FieldingRep {
+  id: string;
+  drill: DrillId;
+  thrown: number; // balls hit or thrown to him
+  caught: number; // fielded cleanly
+  throwsMade: number; // throws attempted after the field
+  throwsAccurate: number; // throws on target / catchable at the bag
 }
 
 export interface FieldingEntry {
@@ -45,7 +78,12 @@ export interface FieldingEntry {
   gloveSide: number;
   gloveSideTurns: number;
   backhandTurns: number;
-  cleanReps: number; // how many of the total reps were fielded cleanly
+  cleanReps: number; // total caught cleanly
+  chances: number; // total balls sent at him
+  throwsMade: number;
+  throwsAccurate: number;
+  /** Every drill line logged in the session. */
+  repLog?: FieldingRep[];
 }
 
 /**
@@ -114,7 +152,12 @@ export type MetricId =
   | 'batSpeed'
   | 'onPlaneEfficiency'
   | 'cleanPct'
+  | 'catchPct'
+  | 'throwAccuracy'
   | 'workoutsPerWeek';
+
+/** Which part of the game a metric or drill belongs to. */
+export type Phase = 'batting' | 'pitching' | 'fielding';
 
 export interface Goal {
   id: string;
@@ -142,6 +185,11 @@ export interface CareerTotals {
   fieldingReps: number;
   cleanReps: number;
   cleanPct: number;
+  chances: number;
+  catchPct: number;
+  throwsMade: number;
+  throwsAccurate: number;
+  throwAccuracy: number;
   swings: number;
   bestBatSpeed: number; // best session average
   bestSwing: number; // best single swing

@@ -1,5 +1,5 @@
-import { Goal, MetricId, Session } from './types';
-import { fieldingRepTotal } from './gamification';
+import { Goal, MetricId, Phase, Session } from './types';
+import { chancesFor } from './fielding';
 
 // ---------------------------------------------------------------------------
 // GOALS ENGINE
@@ -23,7 +23,9 @@ export interface MetricDef {
   short: string;
   unit: string;
   decimals: number;
-  phase: 'Pitching' | 'Fielding' | 'Hitting' | 'Habit';
+  /** Which tab this metric belongs under. */
+  phase: Phase | 'habit';
+  phaseLabel: string;
   from: string; // tailwind gradient start
   to: string; // tailwind gradient end
   text: string;
@@ -49,7 +51,8 @@ export const METRICS: MetricDef[] = [
     short: 'STRIKE %',
     unit: '%',
     decimals: 0,
-    phase: 'Pitching',
+    phase: 'pitching',
+    phaseLabel: 'Pitching',
     from: 'from-orange-500',
     to: 'to-amber-300',
     text: 'text-orange-300',
@@ -64,7 +67,8 @@ export const METRICS: MetricDef[] = [
     short: 'AVG VELO',
     unit: 'mph',
     decimals: 1,
-    phase: 'Pitching',
+    phase: 'pitching',
+    phaseLabel: 'Pitching',
     from: 'from-red-500',
     to: 'to-orange-300',
     text: 'text-red-300',
@@ -79,7 +83,8 @@ export const METRICS: MetricDef[] = [
     short: 'TOP VELO',
     unit: 'mph',
     decimals: 1,
-    phase: 'Pitching',
+    phase: 'pitching',
+    phaseLabel: 'Pitching',
     from: 'from-rose-500',
     to: 'to-pink-300',
     text: 'text-rose-300',
@@ -94,7 +99,8 @@ export const METRICS: MetricDef[] = [
     short: 'BAT SPEED',
     unit: 'mph',
     decimals: 1,
-    phase: 'Hitting',
+    phase: 'batting',
+    phaseLabel: 'Batting',
     from: 'from-yellow-500',
     to: 'to-yellow-200',
     text: 'text-yellow-300',
@@ -109,7 +115,8 @@ export const METRICS: MetricDef[] = [
     short: 'ON PLANE',
     unit: '%',
     decimals: 0,
-    phase: 'Hitting',
+    phase: 'batting',
+    phaseLabel: 'Batting',
     from: 'from-lime-500',
     to: 'to-emerald-300',
     text: 'text-lime-300',
@@ -121,21 +128,42 @@ export const METRICS: MetricDef[] = [
   },
   {
     id: 'cleanPct',
-    label: 'Clean Fielding Percentage',
-    short: 'CLEAN %',
+    label: 'Catch / Clean Field Rate',
+    short: 'CATCH %',
     unit: '%',
     decimals: 0,
-    phase: 'Fielding',
+    phase: 'fielding',
+    phaseLabel: 'Fielding',
     from: 'from-sky-500',
     to: 'to-cyan-300',
     text: 'text-sky-300',
     sessionValue: (s) => {
-      const reps = fieldingRepTotal(s);
-      return s.fielding && reps > 0 ? (s.fielding.cleanReps / reps) * 100 : null;
+      if (!s.fielding) return null;
+      const chances = chancesFor(s.fielding);
+      return chances > 0 ? (s.fielding.cleanReps / chances) * 100 : null;
     },
     aggregate: 'avg',
     cap: 98,
     defaultTarget: 80,
+  },
+  {
+    id: 'throwAccuracy',
+    label: 'Throwing Accuracy',
+    short: 'THROW ACC',
+    unit: '%',
+    decimals: 0,
+    phase: 'fielding',
+    phaseLabel: 'Fielding',
+    from: 'from-teal-500',
+    to: 'to-emerald-300',
+    text: 'text-teal-300',
+    sessionValue: (s) => {
+      const made = s.fielding?.throwsMade ?? 0;
+      return made > 0 ? ((s.fielding!.throwsAccurate ?? 0) / made) * 100 : null;
+    },
+    aggregate: 'avg',
+    cap: 98,
+    defaultTarget: 75,
   },
   {
     id: 'workoutsPerWeek',
@@ -143,7 +171,8 @@ export const METRICS: MetricDef[] = [
     short: 'WORKOUTS/WK',
     unit: '/wk',
     decimals: 1,
-    phase: 'Habit',
+    phase: 'habit',
+    phaseLabel: 'Habit',
     from: 'from-violet-500',
     to: 'to-fuchsia-300',
     text: 'text-violet-300',

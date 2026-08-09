@@ -1,4 +1,5 @@
 import { AwardDef, CareerTotals, LevelInfo, PersonalBest, Session, Tier } from './types';
+import { chancesFor } from './fielding';
 
 // ---------------------------------------------------------------------------
 // XP ENGINE
@@ -26,10 +27,17 @@ export function xpForSession(session: Session, priorBests: Partial<CareerTotals>
   if (session.fielding) {
     phases++;
     const f = session.fielding;
-    const reps = fieldingRepTotal(session);
-    xp += reps * 2;
-    xp += Math.min(f.cleanReps, reps) * 1; // clean-rep bonus
-    if (reps >= 50) xp += 25; // grind bonus
+    const chances = chancesFor(f);
+    xp += chances * 2; // every ball he took
+    xp += Math.min(f.cleanReps, chances) * 1; // clean-glove bonus
+    xp += (f.throwsAccurate ?? 0) * 2; // on-target throws
+
+    const catchPct = chances ? (f.cleanReps / chances) * 100 : 0;
+    const throwPct = f.throwsMade ? ((f.throwsAccurate ?? 0) / f.throwsMade) * 100 : 0;
+
+    if (chances >= 50) xp += 25; // grind bonus
+    if (chances >= 20 && catchPct >= 90) xp += 25; // soft hands bonus
+    if ((f.throwsMade ?? 0) >= 20 && throwPct >= 85) xp += 25; // cannon bonus
   }
 
   if (session.hitting && session.hitting.swings > 0) {
@@ -96,6 +104,11 @@ export function emptyTotals(): CareerTotals {
     fieldingReps: 0,
     cleanReps: 0,
     cleanPct: 0,
+    chances: 0,
+    catchPct: 0,
+    throwsMade: 0,
+    throwsAccurate: 0,
+    throwAccuracy: 0,
     swings: 0,
     bestBatSpeed: 0,
     bestSwing: 0,
@@ -119,6 +132,9 @@ export function computeTotals(sessions: Session[]): CareerTotals {
     if (s.fielding) {
       t.fieldingReps += fieldingRepTotal(s);
       t.cleanReps += s.fielding.cleanReps;
+      t.chances += chancesFor(s.fielding);
+      t.throwsMade += s.fielding.throwsMade ?? 0;
+      t.throwsAccurate += s.fielding.throwsAccurate ?? 0;
     }
     if (s.hitting) {
       t.swings += s.hitting.swings;
@@ -132,6 +148,8 @@ export function computeTotals(sessions: Session[]): CareerTotals {
 
   t.strikePct = t.pitches ? Math.round((t.strikes / t.pitches) * 100) : 0;
   t.cleanPct = t.fieldingReps ? Math.round((t.cleanReps / t.fieldingReps) * 100) : 0;
+  t.catchPct = t.chances ? Math.round((t.cleanReps / t.chances) * 100) : 0;
+  t.throwAccuracy = t.throwsMade ? Math.round((t.throwsAccurate / t.throwsMade) * 100) : 0;
   return t;
 }
 
@@ -234,6 +252,20 @@ export const BADGES: AwardDef[] = [
     progress: (t) => clamp01(t.bestAvgSpeed / 45),
   },
   {
+    id: 'GOLD_GLOVE',
+    label: 'GOLD GLOVE',
+    icon: '🥇',
+    description: '92% catch rate across 150+ chances',
+    progress: (t) => clamp01(Math.min(t.catchPct / 92, t.chances / 150)),
+  },
+  {
+    id: 'CANNON',
+    label: 'THE CANNON',
+    icon: '💪',
+    description: '90% throwing accuracy across 100+ throws',
+    progress: (t) => clamp01(Math.min(t.throwAccuracy / 90, t.throwsMade / 100)),
+  },
+  {
     id: 'IRON_WORKER',
     label: 'IRON WORKER',
     icon: '🏗️',
@@ -277,6 +309,13 @@ export const MILESTONES: AwardDef[] = [
     icon: '🏏',
     description: '1,000 career Blast-tracked swings',
     progress: (t) => clamp01(t.swings / 1000),
+  },
+  {
+    id: '500_THROWS',
+    label: '500 Throws',
+    icon: '🎽',
+    description: '500 career throws to a bag',
+    progress: (t) => clamp01(t.throwsMade / 500),
   },
   {
     id: 'BLAST_75',

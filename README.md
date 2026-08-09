@@ -2,9 +2,9 @@
 
 Workout tracker and gamified player cards for **Carl (9U, #7)** and **Austin (10U, #3)**.
 
-Log pitching, fielding, and Blast Motion hitting sessions. The app tracks **Current Avg → Goal**
-for seven metrics, charts progress over time, celebrates new personal bests, and auto-suggests the
-next goal the moment one gets cleared.
+Log batting, pitching, and fielding **line by line** — every swing, every pitch, every drill. The
+app derives the averages, tracks **Current Avg → Goal**, scores both boys against **AAA
+benchmarks**, and generates a prioritized **Coach's Plan** for the next workout.
 
 ---
 
@@ -100,7 +100,7 @@ After that every push to `main` redeploys automatically. On the boys' devices, o
 
 ## How goals work
 
-### The seven tracked metrics
+### The eight tracked metrics
 
 | Metric | Phase | How it's measured |
 |---|---|---|
@@ -109,7 +109,8 @@ After that every push to `main` redeploys automatically. On the boys' devices, o
 | Top Velo | Pitching | **best** in the window, not averaged |
 | Bat Speed | Hitting | Blast session average, averaged |
 | On Plane Efficiency | Hitting | Blast session average, averaged |
-| Clean Fielding % | Fielding | clean reps ÷ total reps, averaged |
+| Catch % | Fielding | balls handled cleanly ÷ chances, averaged |
+| Throw Accuracy | Fielding | on-target throws ÷ throws made, averaged |
 | Workouts/Week | Habit | distinct days trained per week |
 
 ### Current Avg
@@ -144,7 +145,8 @@ Each metric has a ceiling so suggestions stay age-appropriate:
 | Top Velo | 80 mph | 45 mph |
 | Bat Speed | 75 mph | 45 mph |
 | On Plane Efficiency | 90% | 65% |
-| Clean Fielding % | 98% | 80% |
+| Catch % | 98% | 80% |
+| Throw Accuracy | 98% | 75% |
 | Workouts/Week | 6 | 3 |
 
 Change the 10% in one place — `GOAL_GAIN_PCT` in `lib/goals.ts`.
@@ -183,9 +185,12 @@ bonus.
 | 60%+ strikes on 20+ pitches | +25 |
 | New top velo PR | +50 |
 | New average velo PR | +50 |
-| Each fielding rep | +2 |
-| Each clean fielding rep | +1 |
-| 50+ fielding reps in a session | +25 |
+| Each fielding chance | +2 |
+| Each ball fielded cleanly | +1 |
+| Each throw on target | +2 |
+| 50+ chances in a session | +25 |
+| 90%+ catch rate on 20+ chances | +25 |
+| 85%+ throw accuracy on 20+ throws | +25 |
 | Each Blast-tracked swing | +1 |
 | 70%+ On Plane Efficiency | +25 |
 | New bat speed PR | +50 |
@@ -195,12 +200,70 @@ bonus.
 **Tiers:** Rookie (1–9) → Pro (10–24) → All-Star (25–39) → Hall of Famer (40+).
 
 **Badges:** 🎯 Strike Zone Sniper · ⚡ Bat Speed Demon · 📐 On-Plane Machine · 🧤 The Vacuum ·
-🔥 Flamethrower · 🚀 Pure Heat · 🏗️ Iron Worker
+🔥 Flamethrower · 🚀 Pure Heat · 🥇 Gold Glove · 💪 The Cannon · 🏗️ Iron Worker
 
 **Milestones:** First Workout · 250 Pitches · 250 Strikes · 500 Rep Club · 1,000 Swings ·
-Blast Factor 75
+500 Throws · Blast Factor 75
+
+There's a **How Points Work** button in the header that opens a kid-friendly breakdown of every
+rule above, the level curve, and a fully worked example. Built to hand to Carl and Austin.
 
 Locked awards show a live progress bar so the boys can see how close they are.
+
+---
+
+## The AAA path
+
+Both boys are chasing AAA, so the app scores every metric against a level ladder —
+**Rec → AA → AAA → Elite** — and shows a single **AAA Readiness** percentage on each card plus a
+per-metric breakdown, furthest-from-AAA first.
+
+| Metric | Rec | AA | **AAA** | Elite |
+|---|---|---|---|---|
+| Average Velo | 38 | 42 | **46** | 50 mph |
+| Top Velo | 42 | 46 | **50** | 54 mph |
+| Strike % | 45 | 52 | **60** | 67% |
+| Bat Speed | 38 | 43 | **48** | 53 mph |
+| On Plane Efficiency | 55 | 63 | **72** | 80% |
+| Catch % | 70 | 80 | **88** | 94% |
+| Throw Accuracy | 65 | 75 | **85** | 92% |
+| Workouts / Week | 1 | 2 | **3** | 4.5 |
+
+> **Read this before you quote these numbers to anyone.** No governing body publishes "AAA requires
+> X mph." These are coaching rules of thumb for 9-10 year olds on a 46-foot mound, assembled from
+> travel-ball tryout norms and Blast Motion's published youth ranges. They exist to give the boys a
+> concrete number to chase. If your league's AAA runs hotter or cooler, edit the `aaa` column in
+> `lib/benchmarks.ts` and the entire app re-scores itself.
+
+---
+
+## Coach's Plan
+
+Each tab opens with **COACH'S PLAN** — up to three prioritized things to work on next, generated
+from the last session read against the rolling trend and the AAA line. Every suggestion carries:
+
+- **Why** — the actual numbers that triggered it
+- **Drill** — a named drill
+- **Do** — sets and reps
+- **Say** — one short cue for mid-rep
+
+Suggestions are tagged so you can see at a glance what kind of problem it is:
+
+| Tag | Means |
+|---|---|
+| **SAFETY** | Always ranks first. Pitch counts over the Pitch Smart limit for ages 9-10. |
+| **AAA GAP** | Below the AAA line — the bigger the gap, the higher it ranks. |
+| **SLIPPING** | Dropped meaningfully versus the previous 5-session window. |
+| **SHARPEN** | Mechanical detail — attack angle out of band, off-speed not landing, weakest drill. |
+| **VOLUME** | Enough quality, not enough reps. |
+
+The logic is a readable rules engine in `lib/coaching.ts`, not a black box — you're the coach, and
+you should be able to see exactly why it said what it said. No API key, no network call, works at
+the field with no signal.
+
+**On pitch counts:** if a session exceeds 75 pitches, the plan leads with a rest warning. That
+number comes from MLB Pitch Smart's guidance for ages 9-10. Follow your league's rules and your own
+judgment — the app is a tracker, not a trainer or a medical opinion.
 
 ---
 
@@ -232,6 +295,39 @@ Connection at Impact · Time to Contact · Power · Blast Factor.
 
 ---
 
+## Logging pitches
+
+Same line-by-line pattern as swings. **ADD PITCH** appends a numbered row with speed, pitch type
+(FB / CH / CB / Other), and a STRIKE / BALL toggle. **REPEAT LAST** copies the previous pitch.
+
+Totals build themselves: pitch count, strike %, average velo, top velo, and longest consecutive
+strike run. Leave speed blank for pitches you didn't gun — they still count toward strike %.
+
+Because each pitch carries its type, the coach can tell you the changeup is only landing 30% of the
+time while the fastball sits at 65%.
+
+---
+
+## Logging fielding
+
+One line per drill, tracking four numbers:
+
+| Column | Means |
+|---|---|
+| **Thrown at him** | Every ball sent his way |
+| **Caught** | Handled cleanly |
+| **Throws made** | Throws attempted after the field |
+| **On target** | Catchable at the bag |
+
+Catch % and throw accuracy calculate per line as you type and roll up to the session. Colors flip
+green above the AAA line, amber near it, grey below. Miscounts are safe — caught can never exceed
+chances, and on-target can never exceed throws made.
+
+Drills available: Front Grounders, Pop Flies, Glove Side, Backhand, Glove Side Turns, Backhand
+Turns. The coach uses the per-drill split to name your weakest one.
+
+---
+
 ## Editing a player card
 
 Tap the pencil next to a player's name to change their **jersey number** and **slogan**
@@ -258,9 +354,9 @@ Every chart is date-stamped:
 npm run selftest
 ```
 
-46 checks covering rolling averages, goal progress, next-target suggestions, PR detection, XP math,
-the level curve, swing averaging (including blanks and negative angles), and player profile
-overrides.
+88 checks covering rolling averages, goal progress, next-target suggestions, PR detection, XP math,
+the level curve, swing/pitch/fielding aggregation, AAA benchmark scoring, coaching rule priority,
+and player profile overrides.
 
 ---
 
@@ -270,6 +366,10 @@ overrides.
 |---|---|
 | Default names, numbers, slogans, colors | `lib/players.ts` |
 | Swing columns shown in Core vs All | `SWING_COLUMNS` in `lib/swings.ts` |
+| AAA / AA / Elite thresholds | `BENCHMARKS` in `lib/benchmarks.ts` |
+| Coaching rules, drills, cues | `lib/coaching.ts` |
+| Fielding drill list | `DRILLS` in `lib/fielding.ts` |
+| Pitch types | `PITCH_TYPES` in `lib/pitches.ts` |
 | Goal metrics, ceilings, starting targets | `METRICS` in `lib/goals.ts` |
 | Goal gain percentage (default 10%) | `GOAL_GAIN_PCT` in `lib/goals.ts` |
 | Badges and milestones | `BADGES` / `MILESTONES` in `lib/gamification.ts` |
@@ -293,6 +393,11 @@ components/
   PlayerCard.tsx        HUD, goals, charts, stat blocks, achievements
   GoalsPanel.tsx        Current Avg → Goal cards with inline editing
   SwingLogger.tsx       swing-by-swing entry table with live averages
+  PitchLogger.tsx       pitch-by-pitch entry with strike/ball toggle
+  FieldingLogger.tsx    drill lines with catch % and throw accuracy
+  CoachingPanel.tsx     the prioritized plan for the next workout
+  AAAReadiness.tsx      level ladder and gap-to-AAA per metric
+  PointsExplainer.tsx   how XP works, written for the kids
   PlayerIdentityEditor.tsx  inline number + slogan editing
   ProgressOverTime.tsx  metric picker + line chart with goal line
   CelebrationModal.tsx  PRs, cleared goals, next-target picker
@@ -305,6 +410,10 @@ lib/
   gamification.ts       XP, levels, totals, streaks, awards, PR detection
   goals.ts              metric defs, rolling averages, goal progress, suggestions
   swings.ts             swing columns, averaging, session rollup
+  pitches.ts            pitch types, velo averaging, strike runs
+  fielding.ts           drills, catch %, throw accuracy
+  benchmarks.ts         Rec/AA/AAA/Elite thresholds and readiness scoring
+  coaching.ts           the rules engine behind Coach's Plan
   store.ts              Supabase ⇄ localStorage storage layer
   supabase.ts           client
   useAppData.ts         React hook tying it together
