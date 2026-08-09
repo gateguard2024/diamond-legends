@@ -1,4 +1,4 @@
-import { AwardDef, CareerTotals, LevelInfo, Session, Tier } from './types';
+import { AwardDef, CareerTotals, LevelInfo, PersonalBest, Session, Tier } from './types';
 
 // ---------------------------------------------------------------------------
 // XP ENGINE
@@ -19,7 +19,8 @@ export function xpForSession(session: Session, priorBests: Partial<CareerTotals>
     xp += p.strikes * 2;
     const pct = p.totalPitches ? (p.strikes / p.totalPitches) * 100 : 0;
     if (p.totalPitches >= 20 && pct >= 60) xp += 25; // command bonus
-    if (priorBests.bestTopSpeed !== undefined && p.topSpeed > priorBests.bestTopSpeed) xp += 50; // velo PR
+    if (p.topSpeed > (priorBests.bestTopSpeed ?? 0)) xp += 50; // top velo PR
+    if (p.avgSpeed > (priorBests.bestAvgSpeed ?? 0)) xp += 50; // average velo PR
   }
 
   if (session.fielding) {
@@ -36,7 +37,7 @@ export function xpForSession(session: Session, priorBests: Partial<CareerTotals>
     const h = session.hitting;
     xp += h.swings * 1;
     if (h.onPlaneEfficiency >= 70) xp += 25; // Blast plane bonus
-    if (priorBests.bestBatSpeed !== undefined && h.batSpeed > priorBests.bestBatSpeed) xp += 50; // bat speed PR
+    if (h.batSpeed > (priorBests.bestBatSpeed ?? 0)) xp += 50; // bat speed PR
   }
 
   if (phases === 3) xp += 50; // full workout bonus
@@ -90,6 +91,7 @@ export function emptyTotals(): CareerTotals {
     pitches: 0,
     strikes: 0,
     strikePct: 0,
+    bestAvgSpeed: 0,
     bestTopSpeed: 0,
     fieldingReps: 0,
     cleanReps: 0,
@@ -110,6 +112,7 @@ export function computeTotals(sessions: Session[]): CareerTotals {
     if (s.pitching) {
       t.pitches += s.pitching.totalPitches;
       t.strikes += s.pitching.strikes;
+      t.bestAvgSpeed = Math.max(t.bestAvgSpeed, s.pitching.avgSpeed ?? 0);
       t.bestTopSpeed = Math.max(t.bestTopSpeed, s.pitching.topSpeed);
     }
     if (s.fielding) {
@@ -222,6 +225,13 @@ export const BADGES: AwardDef[] = [
     progress: (t) => clamp01(t.bestTopSpeed / 50),
   },
   {
+    id: 'HEATER',
+    label: 'PURE HEAT',
+    icon: '🚀',
+    description: 'Average 45 mph across a full session',
+    progress: (t) => clamp01(t.bestAvgSpeed / 45),
+  },
+  {
     id: 'IRON_WORKER',
     label: 'IRON WORKER',
     icon: '🏗️',
@@ -290,4 +300,49 @@ export function evaluateAwards(
     const progress = clamp01(def.progress(totals, sessions) || 0);
     return { def, progress, unlocked: progress >= 1 };
   });
+}
+
+// ---------------------------------------------------------------------------
+// PERSONAL BESTS
+// ---------------------------------------------------------------------------
+
+/**
+ * Which stats in `session` beat everything that player had done before it.
+ * `priorSessions` must exclude the session being checked.
+ */
+export function detectPersonalBests(session: Session, priorSessions: Session[]): PersonalBest[] {
+  const prior = computeTotals(priorSessions);
+  const bests: PersonalBest[] = [];
+
+  const check = (
+    metric: string,
+    label: string,
+    value: number | undefined,
+    previous: number,
+    unit: string,
+  ) => {
+    if (value !== undefined && value > 0 && value > previous) {
+      bests.push({ metric, label, value, previous, unit });
+    }
+  };
+
+  if (session.pitching) {
+    check('avgSpeed', 'Average Velo', session.pitching.avgSpeed, prior.bestAvgSpeed, 'mph');
+    check('topSpeed', 'Top Velo', session.pitching.topSpeed, prior.bestTopSpeed, 'mph');
+  }
+  if (session.hitting) {
+    check('batSpeed', 'Bat Speed', session.hitting.batSpeed, prior.bestBatSpeed, 'mph');
+    check('peakHandSpeed', 'Hand Speed', session.hitting.peakHandSpeed, prior.bestHandSpeed, 'mph');
+    check(
+      'onPlaneEfficiency',
+      'On Plane Efficiency',
+      session.hitting.onPlaneEfficiency,
+      prior.bestOnPlane,
+      '%',
+    );
+    check('blastFactor', 'Blast Factor', session.hitting.blastFactor, prior.bestBlastFactor, '');
+  }
+
+  // The very first session of a phase isn't a "best" worth celebrating.
+  return priorSessions.length === 0 ? [] : bests;
 }

@@ -2,7 +2,9 @@
 
 import React, { useMemo } from 'react';
 import { Award, Flame, PlusCircle, Shield, Star, Target, Zap } from 'lucide-react';
-import { Player, Session } from '@/lib/types';
+import { Goal, MetricId, Player, Session } from '@/lib/types';
+import GoalsPanel from './GoalsPanel';
+import ProgressOverTime from './ProgressOverTime';
 import {
   BADGES,
   MILESTONES,
@@ -24,11 +26,15 @@ const shortDate = (iso: string) => {
 export default function PlayerCard({
   player,
   sessions,
+  goals,
   onLog,
+  onSetGoal,
 }: {
   player: Player;
   sessions: Session[];
+  goals: Goal[];
   onLog: () => void;
+  onSetGoal: (metric: MetricId, target: number) => void;
 }) {
   const totals = useMemo(() => computeTotals(sessions), [sessions]);
   const xp = useMemo(() => totalXP(sessions), [sessions]);
@@ -134,6 +140,17 @@ export default function PlayerCard({
       </button>
 
       <div className="space-y-4 mt-5">
+        {/* ---------------- GOALS ---------------- */}
+        <GoalsPanel
+          playerId={player.id}
+          sessions={sessions}
+          goals={goals}
+          onSetGoal={onSetGoal}
+        />
+
+        {/* ---------------- PROGRESS OVER TIME ---------------- */}
+        <ProgressOverTime playerId={player.id} sessions={sessions} goals={goals} />
+
         {/* ---------------- PITCHING ---------------- */}
         <SectionCard
           title="PITCHING"
@@ -163,10 +180,12 @@ export default function PlayerCard({
                 }
                 suffix="%"
               />
+              <StatTile label="AVG SPEED" value={lastPitching?.pitching?.avgSpeed ?? 0} suffix="mph" />
               <StatTile label="TOP SPEED" value={lastPitching?.pitching?.topSpeed ?? 0} suffix="mph" />
-              <StatTile span label="CAREER PITCHES" value={totals.pitches.toLocaleString()} />
+              <StatTile label="CAREER PITCHES" value={totals.pitches.toLocaleString()} />
               <StatTile label="CAREER STRIKE %" value={totals.strikePct} suffix="%" />
-              <StatTile label="BEST VELO" value={totals.bestTopSpeed} suffix="mph" highlight />
+              <StatTile label="BEST AVG VELO" value={totals.bestAvgSpeed} suffix="mph" highlight />
+              <StatTile label="BEST TOP VELO" value={totals.bestTopSpeed} suffix="mph" highlight />
             </div>
             <BarTrend
               data={strikeTrend}

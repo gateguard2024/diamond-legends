@@ -46,7 +46,7 @@ export default function SessionHistory({
                   </td>
                   <td className="py-2.5 pr-3 text-sky-400 whitespace-nowrap">
                     {s.pitching
-                      ? `${s.pitching.strikes}/${s.pitching.totalPitches} K · ${s.pitching.topSpeed} mph`
+                      ? `${s.pitching.strikes}/${s.pitching.totalPitches} K · ${s.pitching.avgSpeed ?? 0} avg · ${s.pitching.topSpeed} top`
                       : '—'}
                   </td>
                   <td className="py-2.5 pr-3 text-sky-400 whitespace-nowrap">

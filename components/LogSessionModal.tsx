@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Target, X, Zap } from 'lucide-react';
+import { Loader2, Shield, Target, X, Zap } from 'lucide-react';
 import { Player, Session } from '@/lib/types';
 
 type Draft = Omit<Session, 'id' | 'xpEarned'>;
@@ -69,10 +69,12 @@ function Toggle({
 
 export default function LogSessionModal({
   player,
+  saving = false,
   onClose,
   onSave,
 }: {
   player: Player;
+  saving?: boolean;
   onClose: () => void;
   onSave: (draft: Draft) => void;
 }) {
@@ -82,7 +84,7 @@ export default function LogSessionModal({
   const [useFielding, setUseFielding] = useState(true);
   const [useHitting, setUseHitting] = useState(true);
 
-  const [p, setP] = useState({ totalPitches: '', strikes: '', topSpeed: '' });
+  const [p, setP] = useState({ totalPitches: '', strikes: '', avgSpeed: '', topSpeed: '' });
   const [f, setF] = useState({
     popFlies: '',
     frontGrounders: '',
@@ -115,6 +117,7 @@ export default function LogSessionModal({
       draft.pitching = {
         totalPitches: num(p.totalPitches),
         strikes: Math.min(num(p.strikes), num(p.totalPitches) || num(p.strikes)),
+        avgSpeed: num(p.avgSpeed),
         topSpeed: num(p.topSpeed),
       };
     }
@@ -208,7 +211,7 @@ export default function LogSessionModal({
               <legend className="text-xs font-black text-orange-300 tracking-wider px-2">
                 PITCHING
               </legend>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <Field
                   label="TOTAL PITCHES"
                   value={p.totalPitches}
@@ -216,10 +219,18 @@ export default function LogSessionModal({
                 />
                 <Field label="STRIKES" value={p.strikes} onChange={(v) => setP({ ...p, strikes: v })} />
                 <Field
+                  label="AVG SPEED (MPH)"
+                  value={p.avgSpeed}
+                  onChange={(v) => setP({ ...p, avgSpeed: v })}
+                  step="0.1"
+                  hint="Average of the session"
+                />
+                <Field
                   label="TOP SPEED (MPH)"
                   value={p.topSpeed}
                   onChange={(v) => setP({ ...p, topSpeed: v })}
                   step="0.1"
+                  hint="Fastest pitch"
                 />
               </div>
             </fieldset>
@@ -362,15 +373,18 @@ export default function LogSessionModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-3 rounded-xl border border-sky-800 text-sky-300 font-bold hover:bg-sky-950"
+            disabled={saving}
+            className="px-5 py-3 rounded-xl border border-sky-800 text-sky-300 font-bold hover:bg-sky-950 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="flex-1 bg-gradient-to-r from-orange-500 to-amber-300 text-slate-950 font-black tracking-wide py-3 rounded-xl hover:brightness-110"
+            disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-300 text-slate-950 font-black tracking-wide py-3 rounded-xl hover:brightness-110 disabled:opacity-60"
           >
-            SAVE &amp; EARN XP
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            {saving ? 'SAVING…' : 'SAVE & EARN XP'}
           </button>
         </div>
       </form>

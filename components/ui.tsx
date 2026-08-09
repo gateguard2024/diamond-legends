@@ -111,6 +111,109 @@ export function BarTrend({
   );
 }
 
+/**
+ * Compact SVG line chart with an optional dashed target line.
+ * Renders "progress over time" for a single metric.
+ */
+export function LineChart({
+  points,
+  target,
+  stroke = '#38bdf8',
+  fill = 'rgba(56,189,248,0.18)',
+  decimals = 0,
+  unit = '',
+  height = 150,
+}: {
+  points: { label: string; value: number }[];
+  target?: number | null;
+  stroke?: string;
+  fill?: string;
+  decimals?: number;
+  unit?: string;
+  height?: number;
+}) {
+  if (points.length === 0) {
+    return (
+      <div
+        className="flex items-center justify-center text-xs text-sky-700 border border-dashed border-sky-900 rounded-xl"
+        style={{ height }}
+      >
+        No data yet — log a session to start the chart
+      </div>
+    );
+  }
+
+  const W = 320;
+  const H = height;
+  const padX = 6;
+  const padY = 14;
+
+  const values = points.map((p) => p.value);
+  const candidates = target != null ? [...values, target] : values;
+  let min = Math.min(...candidates);
+  let max = Math.max(...candidates);
+  if (max === min) {
+    max = max + 1;
+    min = min - 1;
+  }
+  const range = max - min;
+  min -= range * 0.12;
+  max += range * 0.12;
+
+  const x = (i: number) =>
+    points.length === 1 ? W / 2 : padX + (i / (points.length - 1)) * (W - padX * 2);
+  const y = (v: number) => padY + (1 - (v - min) / (max - min)) * (H - padY * 2);
+
+  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(p.value)}`).join(' ');
+  const area = `${line} L ${x(points.length - 1)} ${H - padY} L ${x(0)} ${H - padY} Z`;
+  const last = points[points.length - 1];
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height }} preserveAspectRatio="none">
+        {points.length > 1 && <path d={area} fill={fill} />}
+        <path d={line} fill="none" stroke={stroke} strokeWidth={2.5} strokeLinejoin="round" />
+        {target != null && (
+          <line
+            x1={0}
+            x2={W}
+            y1={y(target)}
+            y2={y(target)}
+            stroke="#fbbf24"
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+          />
+        )}
+        {points.map((p, i) => (
+          <circle
+            key={i}
+            cx={x(i)}
+            cy={y(p.value)}
+            r={i === points.length - 1 ? 4 : 2.5}
+            fill={i === points.length - 1 ? '#fff' : stroke}
+            stroke={stroke}
+            strokeWidth={1.5}
+          />
+        ))}
+      </svg>
+
+      <div className="flex justify-between items-center mt-1.5">
+        <span className="text-[10px] text-sky-600 font-bold">{points[0].label}</span>
+        {target != null && (
+          <span className="text-[10px] text-amber-400 font-bold">
+            — — goal {target.toFixed(decimals)}
+            {unit}
+          </span>
+        )}
+        <span className="text-[10px] text-white font-bold">
+          {last.label}: {last.value.toFixed(decimals)}
+          {unit}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function ProgressRing({ progress }: { progress: number }) {
   const pct = Math.round(progress * 100);
   return (

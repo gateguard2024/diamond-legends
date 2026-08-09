@@ -19,8 +19,6 @@ export interface Player {
     border: string;
     ring: string;
   };
-  /** Optional image dropped into /public. Falls back to initials if missing. */
-  photo?: string;
 }
 
 // --- Session sub-records --------------------------------------------------
@@ -28,7 +26,8 @@ export interface Player {
 export interface PitchingEntry {
   totalPitches: number;
   strikes: number;
-  topSpeed: number; // mph (radar gun)
+  avgSpeed: number; // mph — average of every pitch that got gunned
+  topSpeed: number; // mph — fastest pitch of the session
 }
 
 export interface FieldingEntry {
@@ -50,9 +49,9 @@ export interface HittingEntry {
   batSpeed: number; // mph
   peakHandSpeed: number; // mph
   rotationalAcceleration: number; // g
-  onPlaneEfficiency: number; // % (Blast calls this "On Plane Efficiency"/Plane Score)
+  onPlaneEfficiency: number; // % (Blast's "On Plane Efficiency" / plane score)
   attackAngle: number; // degrees
-  verticalBatAngle: number; // degrees (negative)
+  verticalBatAngle: number; // degrees (normally negative)
   earlyConnection: number; // degrees
   connectionAtImpact: number; // degrees
   timeToContact: number; // seconds
@@ -68,8 +67,31 @@ export interface Session {
   fielding?: FieldingEntry;
   hitting?: HittingEntry;
   notes?: string;
-  /** XP awarded at the time the session was saved. */
+  /** XP awarded when the session was saved. */
   xpEarned: number;
+}
+
+// --- Goals ----------------------------------------------------------------
+
+export type MetricId =
+  | 'strikePct'
+  | 'avgSpeed'
+  | 'topSpeed'
+  | 'batSpeed'
+  | 'onPlaneEfficiency'
+  | 'cleanPct'
+  | 'workoutsPerWeek';
+
+export interface Goal {
+  id: string;
+  playerId: PlayerId;
+  metric: MetricId;
+  target: number;
+  /** What the rolling average was when this goal was set. */
+  startValue: number;
+  createdAt: string; // ISO timestamp
+  achievedAt?: string | null; // ISO timestamp, null while active
+  achievedValue?: number | null;
 }
 
 // --- Derived / computed ---------------------------------------------------
@@ -81,6 +103,7 @@ export interface CareerTotals {
   pitches: number;
   strikes: number;
   strikePct: number;
+  bestAvgSpeed: number;
   bestTopSpeed: number;
   fieldingReps: number;
   cleanReps: number;
@@ -97,7 +120,7 @@ export interface LevelInfo {
   tier: Tier;
   totalXP: number;
   currentXP: number; // XP into the current level
-  xpToNextLevel: number; // XP needed to finish current level
+  xpToNextLevel: number; // XP needed to finish the current level
 }
 
 export interface AwardDef {
@@ -107,4 +130,13 @@ export interface AwardDef {
   description: string;
   /** Returns 0..1 progress toward the award. */
   progress: (t: CareerTotals, sessions: Session[]) => number;
+}
+
+/** A stat that beat every previous session for that player. */
+export interface PersonalBest {
+  metric: string;
+  label: string;
+  value: number;
+  previous: number;
+  unit: string;
 }
