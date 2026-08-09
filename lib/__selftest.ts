@@ -14,6 +14,7 @@ import {
   goalProgress,
   initialTarget,
   suggestNextTarget,
+  targetFromBase,
 } from './goals';
 
 let failures = 0;
@@ -82,11 +83,16 @@ check('remaining to goal', gp.remaining, 7);
 const hit = goalProgress(avgSpeed, { ...goal, target: 42 }, hist);
 check('goal achieved when current >= target', hit.achieved, true);
 
-// Suggestions ladder upward and respect the cap
-check('next target = current + increment', suggestNextTarget(avgSpeed, hist, 42), 45);
-check('next target uses cleared target when higher', suggestNextTarget(avgSpeed, hist, 60), 62);
+// Goals are a 10% gain on the current rolling average
+check('initial target is +10% of current avg', initialTarget(avgSpeed, hist), 47.3); // 43 * 1.1
+check('strike% target rounds to whole', initialTarget(strike, hist), 75); // 68 * 1.1 = 74.8
+check('next target uses cleared target when higher', suggestNextTarget(avgSpeed, hist, 60), 66);
+check('next target uses current avg when higher', suggestNextTarget(avgSpeed, hist, 10), 47.3);
 check('next target respects cap', suggestNextTarget(avgSpeed, hist, 999), avgSpeed.cap);
 check('initial target with no data', initialTarget(avgSpeed, []), avgSpeed.defaultTarget);
+// A tiny base must still produce a strictly harder goal after rounding
+check('rounding never produces a flat goal', targetFromBase(strike, 1) > 1, true);
+check('cap is never exceeded', targetFromBase(strike, 84), strike.cap);
 
 // Personal bests
 const better = mk('2026-08-07', 70, 100, 50, 55);

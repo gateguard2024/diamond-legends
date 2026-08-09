@@ -121,28 +121,48 @@ window.
 
 ### The goal ladder
 
-1. After a player's first session, a starting goal is created for all seven metrics — their
-   current average plus one increment (or a sensible 9U/10U default if there's no data yet).
-2. The progress bar fills from **the value when the goal was set** to the target, so the bar
-   measures actual improvement rather than absolute level.
-3. When Current Avg reaches the target, the goal is banked and a **celebration modal** fires
-   showing what they hit and proposing the next target. You can accept the suggestion or type your
-   own, then **LOCK IT IN**.
-4. Cleared goals stay on the card as a trophy strip.
+Goals maintain themselves — you never have to seed them.
 
-Increments and ceilings per metric:
+1. **Auto-created from real data.** On every load, any metric that has data but no active goal gets
+   one, set at **10% above the current rolling average**. Log a first pitching session and the
+   pitching goals appear already scaled to what he's actually throwing. Metrics with no data yet
+   are skipped, so nobody stares at a bat speed goal before taking a swing.
+2. **Progress is measured as improvement.** The bar fills from the average *when the goal was set*
+   to the target — not from zero — so it shows how much better they've gotten.
+3. **Clearing a goal raises the bar.** When Current Avg reaches the target, the goal is banked and
+   the celebration modal proposes the next one at **+10%** over whichever is higher: the average
+   they just posted, or the target they just beat. Accept it or type your own, then **LOCK IT IN**.
+   Skip it and the next load recreates it automatically.
+4. **Cleared goals stay** on the card as a trophy strip.
 
-| Metric | Increment | Ceiling |
+Each metric has a ceiling so suggestions stay age-appropriate:
+
+| Metric | Ceiling | Starting target with no data |
 |---|---|---|
-| Strike % | +5 | 85% |
-| Avg Velo | +2 mph | 75 |
-| Top Velo | +2 mph | 80 |
-| Bat Speed | +2 mph | 75 |
-| On Plane Efficiency | +5 | 90% |
-| Clean Fielding % | +5 | 98% |
-| Workouts/Week | +1 | 6 |
+| Strike % | 85% | 55% |
+| Avg Velo | 75 mph | 40 mph |
+| Top Velo | 80 mph | 45 mph |
+| Bat Speed | 75 mph | 45 mph |
+| On Plane Efficiency | 90% | 65% |
+| Clean Fielding % | 98% | 80% |
+| Workouts/Week | 6 | 3 |
+
+Change the 10% in one place — `GOAL_GAIN_PCT` in `lib/goals.ts`.
 
 You can override any goal at any time — tap the target number on the card.
+
+### Bests and milestones — pulled automatically
+
+Nothing here is entered by hand. Every number is derived from the session log:
+
+- **BEST EVER** on each goal card is that metric's best single session, all-time.
+- **Badges** are skill achievements (🎯 Strike Zone Sniper, ⚡ Bat Speed Demon, 🚀 Pure Heat…) and
+  live at the bottom of the player card under **BADGES & MILESTONES**. They're defined in `BADGES`
+  in `lib/gamification.ts`.
+- **Milestones** are career-volume achievements (250 Pitches, 500 Rep Club, 1,000 Swings…) in the
+  same section, defined in `MILESTONES` in `lib/gamification.ts`.
+- Locked awards show a live progress bar, and the section header calls out **Next up** — whichever
+  locked award is closest to unlocking.
 
 ### Personal bests
 
@@ -238,7 +258,7 @@ Every chart is date-stamped:
 npm run selftest
 ```
 
-41 checks covering rolling averages, goal progress, next-target suggestions, PR detection, XP math,
+46 checks covering rolling averages, goal progress, next-target suggestions, PR detection, XP math,
 the level curve, swing averaging (including blanks and negative angles), and player profile
 overrides.
 
@@ -250,7 +270,9 @@ overrides.
 |---|---|
 | Default names, numbers, slogans, colors | `lib/players.ts` |
 | Swing columns shown in Core vs All | `SWING_COLUMNS` in `lib/swings.ts` |
-| Goal metrics, increments, ceilings, defaults | `METRICS` in `lib/goals.ts` |
+| Goal metrics, ceilings, starting targets | `METRICS` in `lib/goals.ts` |
+| Goal gain percentage (default 10%) | `GOAL_GAIN_PCT` in `lib/goals.ts` |
+| Badges and milestones | `BADGES` / `MILESTONES` in `lib/gamification.ts` |
 | Rolling window size (default 5) | `ROLLING_WINDOW` in `lib/goals.ts` |
 | XP values, level curve, tiers | `lib/gamification.ts` |
 | Badges & milestones | `BADGES` / `MILESTONES` in `lib/gamification.ts` |

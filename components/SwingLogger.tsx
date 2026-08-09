@@ -89,36 +89,40 @@ export default function SwingLogger({
           </span>
         </button>
       ) : (
-        <div className="overflow-x-auto -mx-1 px-1">
-          <table className="w-full border-separate border-spacing-y-1">
+        <div className="overflow-auto max-h-[46vh] rounded-xl border border-sky-950">
+          <table className="w-full border-separate border-spacing-0">
             <thead>
               <tr>
-                <th className="text-[9px] font-black text-sky-600 tracking-wider text-left pl-1 pb-1 w-8">
+                <th className="sticky top-0 z-20 bg-slate-900 border-b border-sky-800 text-[9px] font-black text-sky-500 tracking-wider text-left pl-2 py-2 w-8">
                   #
                 </th>
                 {columns.map((c) => (
                   <th
                     key={c.key}
                     title={c.label}
-                    className="text-[9px] font-black text-sky-600 tracking-wider text-center pb-1 px-0.5"
+                    className="sticky top-0 z-20 bg-slate-900 border-b border-sky-800 text-[9px] font-black text-sky-400 tracking-wider text-center py-2 px-1 whitespace-nowrap"
                   >
                     {c.short}
-                    {c.unit && <span className="text-slate-700"> {c.unit}</span>}
+                    {c.unit && <span className="text-sky-700"> {c.unit}</span>}
                   </th>
                 ))}
-                <th className="w-7" />
+                <th className="sticky top-0 z-20 bg-slate-900 border-b border-sky-800 w-8" />
               </tr>
             </thead>
             <tbody>
               {swings.map((s, i) => (
                 <tr key={s.id} className="group">
-                  <td className="text-[11px] font-black text-sky-500 pl-1 tabular-nums">{i + 1}</td>
+                  <td className="text-[11px] font-black text-sky-500 pl-2 py-0.5 tabular-nums">
+                    {i + 1}
+                  </td>
                   {columns.map((c) => (
-                    <td key={c.key} className="px-0.5">
+                    <td key={c.key} className="px-0.5 py-0.5">
                       <input
                         type="number"
                         step={c.step}
                         inputMode="decimal"
+                        aria-label={`Swing ${i + 1} ${c.label}`}
+                        title={c.label}
                         value={s[c.key] === 0 ? '' : String(s[c.key])}
                         placeholder="—"
                         onChange={(e) => setValue(s.id, c.key, e.target.value)}
@@ -126,7 +130,7 @@ export default function SwingLogger({
                       />
                     </td>
                   ))}
-                  <td className="text-center">
+                  <td className="text-center py-0.5">
                     <button
                       type="button"
                       onClick={() => removeSwing(s.id)}
@@ -140,19 +144,22 @@ export default function SwingLogger({
               ))}
             </tbody>
 
-            {/* Live session averages */}
+            {/* Live session averages — pinned to the bottom of the scroll box */}
             {filled.length > 0 && (
               <tfoot>
                 <tr>
-                  <td className="text-[9px] font-black text-yellow-400 tracking-wider pl-1 pt-2">
+                  <td className="sticky bottom-0 z-20 bg-slate-900 border-t border-yellow-700/50 text-[9px] font-black text-yellow-400 tracking-wider pl-2 py-1.5">
                     AVG
                   </td>
                   {columns.map((c) => {
                     const avg = averageMetric(filled, c.key);
                     const n = metricCount(filled, c.key);
                     return (
-                      <td key={c.key} className="px-0.5 pt-2">
-                        <div className="bg-yellow-500/10 border border-yellow-600/40 rounded-md py-1.5 text-center">
+                      <td
+                        key={c.key}
+                        className="sticky bottom-0 z-20 bg-slate-900 border-t border-yellow-700/50 px-0.5 py-1.5"
+                      >
+                        <div className="bg-yellow-500/10 border border-yellow-600/40 rounded-md py-1 text-center">
                           <div className="text-sm font-black text-yellow-200 leading-none">
                             {n ? avg.toFixed(c.decimals) : '—'}
                           </div>
@@ -165,7 +172,7 @@ export default function SwingLogger({
                       </td>
                     );
                   })}
-                  <td />
+                  <td className="sticky bottom-0 z-20 bg-slate-900 border-t border-yellow-700/50" />
                 </tr>
               </tfoot>
             )}

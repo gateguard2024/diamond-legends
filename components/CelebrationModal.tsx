@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Flame, PartyPopper, Sparkles, Target, Trophy } from 'lucide-react';
 import { MetricId, PersonalBest, Player } from '@/lib/types';
 import { displayName } from '@/lib/players';
-import { METRIC_BY_ID } from '@/lib/goals';
+import { GOAL_GAIN_PCT, METRIC_BY_ID } from '@/lib/goals';
 import type { SaveResult } from '@/lib/useAppData';
 
 export default function CelebrationModal({
@@ -114,8 +114,15 @@ export default function CelebrationModal({
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-sky-500 tracking-wider">
+                          <span
+                            className="text-[10px] font-bold text-sky-500 tracking-wider"
+                            title={`${Math.round(GOAL_GAIN_PCT * 100)}% better than the average just posted`}
+                          >
                             NEXT GOAL
+                            <span className="text-amber-400">
+                              {' '}
+                              +{Math.round(GOAL_GAIN_PCT * 100)}%
+                            </span>
                           </span>
                           <input
                             type="number"

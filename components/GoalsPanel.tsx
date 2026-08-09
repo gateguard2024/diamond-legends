@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Check, Crosshair, Pencil, Target, TrendingDown, TrendingUp, Trophy, X } from 'lucide-react';
 import { Goal, MetricId, PlayerId, Session } from '@/lib/types';
 import {
+  GOAL_GAIN_PCT,
   METRIC_BY_ID,
   METRICS,
   MetricDef,
@@ -14,6 +15,8 @@ import {
   goalProgress,
   initialTarget,
 } from '@/lib/goals';
+
+const GAIN_LABEL = `+${Math.round(GOAL_GAIN_PCT * 100)}%`;
 
 function DeltaChip({ def, current, previous }: { def: MetricDef; current: number; previous: number }) {
   const diff = current - previous;
@@ -75,8 +78,11 @@ function GoalRow({
           <div className="text-[9px] text-sky-700 font-bold">{def.phase}</div>
         </div>
         {gp.best !== null && (
-          <div className="text-right shrink-0">
-            <div className="text-[9px] text-sky-700 font-bold tracking-wider">PB</div>
+          <div
+            className="text-right shrink-0"
+            title="Best single session ever — pulled automatically from the log"
+          >
+            <div className="text-[9px] text-sky-700 font-bold tracking-wider">BEST EVER</div>
             <div className="text-[11px] font-black text-sky-300">
               {gp.best.toFixed(def.decimals)}
               {def.unit}
@@ -134,7 +140,7 @@ function GoalRow({
             <button
               onClick={startEdit}
               className="group text-right"
-              title="Tap to change this goal"
+              title={`Goal set at ${GAIN_LABEL} over the average when it was created. Tap to change.`}
             >
               <div className="flex items-center justify-end gap-1">
                 <Target className="w-3 h-3 text-amber-400" />
@@ -143,15 +149,18 @@ function GoalRow({
                 </span>
                 <Pencil className="w-3 h-3 text-slate-600 group-hover:text-amber-300" />
               </div>
-              <div className="text-[9px] text-sky-600 font-bold tracking-wider mt-0.5">GOAL</div>
+              <div className="text-[9px] text-sky-600 font-bold tracking-wider mt-0.5">
+                GOAL · {GAIN_LABEL}
+              </div>
             </button>
           ) : (
             <button
               onClick={startEdit}
+              title={`${GAIN_LABEL} over the current average`}
               className="flex items-center gap-1 text-[10px] font-black bg-amber-500/15 border border-amber-500/40 text-amber-300 px-2 py-1.5 rounded-lg hover:bg-amber-500/25"
             >
               <Crosshair className="w-3 h-3" />
-              SET GOAL · {suggested.toFixed(def.decimals)}
+              SET {suggested.toFixed(def.decimals)} · {GAIN_LABEL}
             </button>
           )}
         </div>
@@ -207,8 +216,8 @@ export default function GoalsPanel({
         <h3 className="text-sm sm:text-base font-bold text-amber-300 flex items-center gap-2">
           <Target className="w-4 h-4" /> CURRENT AVG → GOAL
         </h3>
-        <span className="text-[10px] text-sky-600 font-bold">
-          Rolling last {ROLLING_WINDOW} sessions
+        <span className="text-[10px] text-sky-600 font-bold text-right">
+          Rolling last {ROLLING_WINDOW} sessions · goals auto-set at {GAIN_LABEL}
         </span>
       </div>
 

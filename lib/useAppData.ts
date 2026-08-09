@@ -205,8 +205,13 @@ export function useAppData() {
 }
 
 /**
- * A player who has logged at least one session but has no goals yet gets a
- * starting ladder built from their own numbers. Runs once, on load.
+ * Goals maintain themselves. On every load, any metric that has real data but
+ * no active goal gets one created automatically at 10% over its current
+ * rolling average — so as soon as a boy logs his first pitching session, the
+ * pitching goals appear, already scaled to what he's actually throwing.
+ *
+ * Metrics with no data yet are skipped, so nobody stares at a bat speed goal
+ * before they've taken a swing.
  */
 async function seedMissingGoals(
   sessions: Session[],
@@ -219,16 +224,22 @@ async function seedMissingGoals(
     const playerSessions = sessions.filter((s) => s.playerId === playerId);
     if (!playerSessions.length) continue;
 
-    const hasAny = goals.some((g) => g.playerId === playerId);
-    if (hasAny) continue;
-
     for (const def of METRICS) {
+      // Already has a live goal for this metric — leave it alone.
+      if (goals.some((g) => g.playerId === playerId && g.metric === def.id && !g.achievedAt)) {
+        continue;
+      }
+
+      // No data for this metric yet — nothing to base a target on.
+      const current = currentValue(def, playerSessions);
+      if (current === null || current <= 0) continue;
+
       try {
         const goal = await createGoal({
           playerId,
           metric: def.id,
           target: initialTarget(def, playerSessions),
-          startValue: currentValue(def, playerSessions) ?? 0,
+          startValue: current,
         });
         created.push(goal);
       } catch {

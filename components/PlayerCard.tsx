@@ -74,6 +74,11 @@ export default function PlayerCard({
 
   const badges = evaluateAwards(BADGES, totals, sessions);
   const milestones = evaluateAwards(MILESTONES, totals, sessions);
+
+  // Closest locked award — the one worth chasing next.
+  const nextUp = [...badges, ...milestones]
+    .filter((a) => !a.unlocked && a.progress > 0)
+    .sort((a, b) => b.progress - a.progress)[0];
   const xpPct = Math.min(100, (level.currentXP / level.xpToNextLevel) * 100);
 
   return (
@@ -279,7 +284,20 @@ export default function PlayerCard({
         </SectionCard>
 
         {/* ---------------- ACHIEVEMENTS ---------------- */}
-        <SectionCard title="ACHIEVEMENTS" icon={<Award className="w-4 h-4" />} accentText="text-white">
+        <SectionCard
+          title="BADGES & MILESTONES"
+          icon={<Award className="w-4 h-4" />}
+          accentText="text-white"
+          right={
+            nextUp ? (
+              <span className="text-[10px] text-sky-600 font-bold">
+                Next up: {nextUp.def.label} · {Math.round(nextUp.progress * 100)}%
+              </span>
+            ) : (
+              <span className="text-[10px] text-sky-600 font-bold">Auto-tracked</span>
+            )
+          }
+        >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
             {badges.map(({ def, unlocked, progress }) => (
               <div
@@ -308,7 +326,9 @@ export default function PlayerCard({
             ))}
           </div>
 
-          <h4 className="text-[10px] text-sky-600 font-bold tracking-wider mb-2">MILESTONES</h4>
+          <h4 className="text-[10px] text-sky-600 font-bold tracking-wider mb-2">
+            MILESTONES — CAREER VOLUME
+          </h4>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {milestones.map(({ def, unlocked, progress }) => (
               <div

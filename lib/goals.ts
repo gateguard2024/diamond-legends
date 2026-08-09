@@ -11,6 +11,12 @@ import { fieldingRepTotal } from './gamification';
 
 export const ROLLING_WINDOW = 5;
 
+/**
+ * Every new goal is a 10% improvement on the current rolling average.
+ * Change this one number to make the ladder steeper or gentler.
+ */
+export const GOAL_GAIN_PCT = 0.1;
+
 export interface MetricDef {
   id: MetricId;
   label: string;
@@ -25,8 +31,6 @@ export interface MetricDef {
   sessionValue: (s: Session) => number | null;
   /** How the window is combined. `max` = "best in the window". */
   aggregate: 'avg' | 'max';
-  /** Bump applied when suggesting the next goal. */
-  increment: number;
   /** Sensible ceiling so suggestions don't run away. */
   cap: number;
   /** Target used before there's enough data to suggest one. */
@@ -51,7 +55,6 @@ export const METRICS: MetricDef[] = [
     text: 'text-orange-300',
     sessionValue: (s) => (pitchOK(s) ? (s.pitching!.strikes / s.pitching!.totalPitches) * 100 : null),
     aggregate: 'avg',
-    increment: 5,
     cap: 85,
     defaultTarget: 55,
   },
@@ -67,7 +70,6 @@ export const METRICS: MetricDef[] = [
     text: 'text-red-300',
     sessionValue: (s) => (pitchOK(s) && s.pitching!.avgSpeed > 0 ? s.pitching!.avgSpeed : null),
     aggregate: 'avg',
-    increment: 2,
     cap: 75,
     defaultTarget: 40,
   },
@@ -83,7 +85,6 @@ export const METRICS: MetricDef[] = [
     text: 'text-rose-300',
     sessionValue: (s) => (pitchOK(s) && s.pitching!.topSpeed > 0 ? s.pitching!.topSpeed : null),
     aggregate: 'max',
-    increment: 2,
     cap: 80,
     defaultTarget: 45,
   },
@@ -99,7 +100,6 @@ export const METRICS: MetricDef[] = [
     text: 'text-yellow-300',
     sessionValue: (s) => (hitOK(s) && s.hitting!.batSpeed > 0 ? s.hitting!.batSpeed : null),
     aggregate: 'avg',
-    increment: 2,
     cap: 75,
     defaultTarget: 45,
   },
@@ -116,7 +116,6 @@ export const METRICS: MetricDef[] = [
     sessionValue: (s) =>
       hitOK(s) && s.hitting!.onPlaneEfficiency > 0 ? s.hitting!.onPlaneEfficiency : null,
     aggregate: 'avg',
-    increment: 5,
     cap: 90,
     defaultTarget: 65,
   },
@@ -135,7 +134,6 @@ export const METRICS: MetricDef[] = [
       return s.fielding && reps > 0 ? (s.fielding.cleanReps / reps) * 100 : null;
     },
     aggregate: 'avg',
-    increment: 5,
     cap: 98,
     defaultTarget: 80,
   },
@@ -151,7 +149,6 @@ export const METRICS: MetricDef[] = [
     text: 'text-violet-300',
     sessionValue: () => null,
     aggregate: 'avg',
-    increment: 1,
     cap: 6,
     defaultTarget: 3,
     derived: true,
@@ -296,8 +293,28 @@ export function goalProgress(def: MetricDef, goal: Goal | null, sessions: Sessio
 }
 
 /**
- * Next target to propose. Built off whichever is higher — what they just hit,
- * or the goal they just cleared — so the ladder always moves up.
+ * A 10% gain on `base`, floored at the metric's minimum meaningful step and
+ * ceilinged at its cap. Rounding is done at the metric's own precision, so a
+ * 10% gain that would disappear into rounding still moves by one step.
+ */
+export function targetFromBase(def: MetricDef, base: number): number {
+  if (base <= 0) return def.defaultTarget;
+
+  // 10% better than where they are now.
+  let target = round(base * (1 + GOAL_GAIN_PCT), def.decimals);
+
+  // If rounding swallowed the gain, nudge it up by one unit of precision so
+  // the goal is always strictly harder than the current average.
+  const smallestStep = 10 ** -def.decimals;
+  if (target <= base) target = round(base + smallestStep, def.decimals);
+
+  return round(Math.min(def.cap, target), def.decimals);
+}
+
+/**
+ * Next target to propose after a goal is cleared. Built off whichever is
+ * higher — the average they just posted, or the goal they just beat — so the
+ * ladder always moves up, never sideways.
  */
 export function suggestNextTarget(
   def: MetricDef,
@@ -306,15 +323,14 @@ export function suggestNextTarget(
 ): number {
   const current = currentValue(def, sessions);
   const base = Math.max(current ?? 0, clearedTarget ?? 0);
-  if (base === 0) return def.defaultTarget;
-  return round(Math.min(def.cap, base + def.increment), def.decimals);
+  return targetFromBase(def, base);
 }
 
-/** Target for a metric that has never had a goal. */
+/** Target for a metric that has never had a goal: 10% over today's average. */
 export function initialTarget(def: MetricDef, sessions: Session[]): number {
   const current = currentValue(def, sessions);
-  if (current === null) return def.defaultTarget;
-  return round(Math.min(def.cap, Math.max(def.defaultTarget, current + def.increment)), def.decimals);
+  if (current === null || current <= 0) return def.defaultTarget;
+  return targetFromBase(def, current);
 }
 
 /** Active goal for a metric, if any. */
