@@ -2,7 +2,10 @@
 
 import React, { useState } from 'react';
 import { Loader2, Shield, Target, X, Zap } from 'lucide-react';
-import { Player, Session } from '@/lib/types';
+import { Player, Session, Swing } from '@/lib/types';
+import { displayName } from '@/lib/players';
+import { hittingFromSwings, isSwingFilled } from '@/lib/swings';
+import SwingLogger from './SwingLogger';
 
 type Draft = Omit<Session, 'id' | 'xpEarned'>;
 
@@ -94,20 +97,8 @@ export default function LogSessionModal({
     backhandTurns: '',
     cleanReps: '',
   });
-  const [h, setH] = useState({
-    swings: '',
-    batSpeed: '',
-    peakHandSpeed: '',
-    rotationalAcceleration: '',
-    onPlaneEfficiency: '',
-    attackAngle: '',
-    verticalBatAngle: '',
-    earlyConnection: '',
-    connectionAtImpact: '',
-    timeToContact: '',
-    power: '',
-    blastFactor: '',
-  });
+  const [swings, setSwings] = useState<Swing[]>([]);
+  const [showAllColumns, setShowAllColumns] = useState(false);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,21 +123,8 @@ export default function LogSessionModal({
         cleanReps: num(f.cleanReps),
       };
     }
-    if (useHitting) {
-      draft.hitting = {
-        swings: num(h.swings),
-        batSpeed: num(h.batSpeed),
-        peakHandSpeed: num(h.peakHandSpeed),
-        rotationalAcceleration: num(h.rotationalAcceleration),
-        onPlaneEfficiency: num(h.onPlaneEfficiency),
-        attackAngle: num(h.attackAngle),
-        verticalBatAngle: num(h.verticalBatAngle),
-        earlyConnection: num(h.earlyConnection),
-        connectionAtImpact: num(h.connectionAtImpact),
-        timeToContact: num(h.timeToContact),
-        power: num(h.power),
-        blastFactor: num(h.blastFactor),
-      };
+    if (useHitting && swings.some(isSwingFilled)) {
+      draft.hitting = hittingFromSwings(swings);
     }
 
     onSave(draft);
@@ -162,7 +140,7 @@ export default function LogSessionModal({
         <div className="flex items-center justify-between p-5 border-b border-sky-900 sticky top-0 bg-slate-900 rounded-t-3xl z-10">
           <div>
             <h2 className="text-xl font-black text-white">LOG WORKOUT</h2>
-            <p className="text-xs text-sky-400 font-medium">{player.nickname}</p>
+            <p className="text-xs text-sky-400 font-medium">{displayName(player)}</p>
           </div>
           <button type="button" onClick={onClose} className="text-sky-500 hover:text-white p-1">
             <X />
@@ -275,81 +253,18 @@ export default function LogSessionModal({
             </fieldset>
           )}
 
-          {/* Hitting / Blast */}
+          {/* Hitting / Blast — swing by swing */}
           {useHitting && (
             <fieldset className="bg-sky-950/40 border border-sky-900 rounded-2xl p-4">
               <legend className="text-xs font-black text-yellow-300 tracking-wider px-2">
-                HITTING — BLAST MOTION SESSION AVERAGES
+                HITTING — BLAST MOTION, SWING BY SWING
               </legend>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Field label="SWINGS" value={h.swings} onChange={(v) => setH({ ...h, swings: v })} />
-                <Field
-                  label="BAT SPEED (MPH)"
-                  value={h.batSpeed}
-                  onChange={(v) => setH({ ...h, batSpeed: v })}
-                  step="0.1"
-                />
-                <Field
-                  label="PEAK HAND SPEED"
-                  value={h.peakHandSpeed}
-                  onChange={(v) => setH({ ...h, peakHandSpeed: v })}
-                  step="0.1"
-                />
-                <Field
-                  label="ROTATIONAL ACCEL (g)"
-                  value={h.rotationalAcceleration}
-                  onChange={(v) => setH({ ...h, rotationalAcceleration: v })}
-                  step="0.1"
-                />
-                <Field
-                  label="ON PLANE EFF. (%)"
-                  value={h.onPlaneEfficiency}
-                  onChange={(v) => setH({ ...h, onPlaneEfficiency: v })}
-                  step="1"
-                />
-                <Field
-                  label="ATTACK ANGLE (°)"
-                  value={h.attackAngle}
-                  onChange={(v) => setH({ ...h, attackAngle: v })}
-                  step="0.1"
-                />
-                <Field
-                  label="VERT BAT ANGLE (°)"
-                  value={h.verticalBatAngle}
-                  onChange={(v) => setH({ ...h, verticalBatAngle: v })}
-                  step="0.1"
-                  hint="Usually negative"
-                />
-                <Field
-                  label="EARLY CONNECTION (°)"
-                  value={h.earlyConnection}
-                  onChange={(v) => setH({ ...h, earlyConnection: v })}
-                  step="0.1"
-                />
-                <Field
-                  label="CONN. AT IMPACT (°)"
-                  value={h.connectionAtImpact}
-                  onChange={(v) => setH({ ...h, connectionAtImpact: v })}
-                  step="0.1"
-                />
-                <Field
-                  label="TIME TO CONTACT (S)"
-                  value={h.timeToContact}
-                  onChange={(v) => setH({ ...h, timeToContact: v })}
-                  step="0.01"
-                />
-                <Field
-                  label="POWER (kW)"
-                  value={h.power}
-                  onChange={(v) => setH({ ...h, power: v })}
-                  step="0.1"
-                />
-                <Field
-                  label="BLAST FACTOR"
-                  value={h.blastFactor}
-                  onChange={(v) => setH({ ...h, blastFactor: v })}
-                />
-              </div>
+              <SwingLogger
+                swings={swings}
+                onChange={setSwings}
+                showAll={showAllColumns}
+                onToggleColumns={() => setShowAllColumns((v) => !v)}
+              />
             </fieldset>
           )}
 

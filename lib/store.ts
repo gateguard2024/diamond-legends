@@ -1,4 +1,4 @@
-import { Goal, MetricId, PlayerId, Session } from './types';
+import { Goal, MetricId, PlayerId, PlayerProfile, Session } from './types';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -13,6 +13,7 @@ import { getSupabase, isSupabaseConfigured } from './supabase';
 
 const SESSION_KEY = 'diamond-legends:sessions:v1';
 const GOAL_KEY = 'diamond-legends:goals:v1';
+const PROFILE_KEY = 'diamond-legends:profiles:v1';
 
 export const backendName = () => (isSupabaseConfigured ? 'Supabase' : 'this device');
 
@@ -222,6 +223,46 @@ export async function removeGoal(id: string): Promise<void> {
     return;
   }
   const { error } = await sb.from('goals').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// PLAYER PROFILES (jersey number + slogan)
+// ---------------------------------------------------------------------------
+
+export async function fetchProfiles(): Promise<PlayerProfile[]> {
+  const sb = getSupabase();
+  if (!sb) return readLocal<PlayerProfile>(PROFILE_KEY);
+
+  const { data, error } = await sb.from('player_profiles').select('*');
+  if (error) throw new Error(error.message);
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  return (data ?? []).map((r: any) => ({
+    playerId: r.player_id,
+    number: Number(r.number ?? 0),
+    slogan: r.slogan ?? '',
+  }));
+}
+
+export async function saveProfile(profile: PlayerProfile): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) {
+    const rows = readLocal<PlayerProfile>(PROFILE_KEY).filter(
+      (p) => p.playerId !== profile.playerId,
+    );
+    writeLocal(PROFILE_KEY, [...rows, profile]);
+    return;
+  }
+
+  const { error } = await sb.from('player_profiles').upsert(
+    {
+      player_id: profile.playerId,
+      number: profile.number,
+      slogan: profile.slogan,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'player_id' },
+  );
   if (error) throw new Error(error.message);
 }
 

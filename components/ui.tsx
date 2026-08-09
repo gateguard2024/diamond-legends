@@ -87,7 +87,11 @@ export function BarTrend({
         <>
           <div className="flex items-end gap-1.5 h-24">
             {data.map((d, i) => (
-              <div key={i} className="flex-1 flex flex-col justify-end h-full group relative">
+              <div
+                key={i}
+                title={`${d.label} — ${format(d.value)}`}
+                className="flex-1 flex flex-col justify-end h-full group relative"
+              >
                 <div className="text-[9px] text-sky-400 font-bold text-center mb-1">
                   {format(d.value)}
                 </div>
@@ -98,9 +102,14 @@ export function BarTrend({
               </div>
             ))}
           </div>
-          <div className="flex gap-1.5 mt-1.5">
+          <div className="flex gap-1.5 mt-1.5 pt-1 border-t border-sky-900/60">
             {data.map((d, i) => (
-              <div key={i} className="flex-1 text-[9px] text-sky-600 font-bold text-center">
+              <div
+                key={i}
+                className={`flex-1 text-[9px] font-bold text-center ${
+                  i === data.length - 1 ? 'text-white' : 'text-sky-600'
+                }`}
+              >
                 {d.label}
               </div>
             ))}
@@ -193,12 +202,39 @@ export function LineChart({
             fill={i === points.length - 1 ? '#fff' : stroke}
             stroke={stroke}
             strokeWidth={1.5}
-          />
+          >
+            <title>{`${p.label}: ${p.value.toFixed(decimals)}${unit}`}</title>
+          </circle>
         ))}
       </svg>
 
-      <div className="flex justify-between items-center mt-1.5">
-        <span className="text-[10px] text-sky-600 font-bold">{points[0].label}</span>
+      {/* Date axis — thinned out so labels never collide */}
+      <div className="flex mt-1.5">
+        {points.map((p, i) => {
+          const stride = Math.ceil(points.length / 7);
+          const show = i === 0 || i === points.length - 1 || i % stride === 0;
+          return (
+            <div
+              key={i}
+              className="flex-1 text-center"
+              title={`${p.label} — ${p.value.toFixed(decimals)}${unit}`}
+            >
+              <span
+                className={`text-[9px] font-bold ${
+                  i === points.length - 1 ? 'text-white' : 'text-sky-600'
+                } ${show ? '' : 'invisible'}`}
+              >
+                {p.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-between items-center mt-1 pt-1.5 border-t border-sky-900/60">
+        <span className="text-[10px] text-sky-600 font-bold">
+          {points.length} session{points.length === 1 ? '' : 's'}
+        </span>
         {target != null && (
           <span className="text-[10px] text-amber-400 font-bold">
             — — goal {target.toFixed(decimals)}

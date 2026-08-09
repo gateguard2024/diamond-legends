@@ -37,7 +37,11 @@ Do this once so Carl's iPad, Austin's phone, and your laptop all see the same da
 1. In the left sidebar: **SQL Editor** → **New query**.
 2. Open `supabase/schema.sql` from this repo, copy the whole file, paste it in.
 3. Click **Run**. You should see "Success. No rows returned."
-4. Check **Table Editor** — you should now have `sessions` and `goals`.
+4. Check **Table Editor** — you should now have `sessions`, `goals`, and `player_profiles`.
+
+> **Already ran an earlier version of this file?** Just run the whole thing again. Every statement
+> is `create table if not exists` / `drop policy if exists`, so re-running is safe and adds the
+> `player_profiles` table without touching your data.
 
 ### 3. Grab your keys
 
@@ -180,12 +184,51 @@ Locked awards show a live progress bar so the boys can see how close they are.
 
 ---
 
-## Blast Motion fields
+## Logging swings
 
-Hitting inputs mirror the session-average labels in the Blast Baseball app so numbers copy
-straight across: Swings · Bat Speed · Peak Hand Speed · Rotational Acceleration ·
-On Plane Efficiency · Attack Angle · Vertical Bat Angle · Early Connection · Connection at Impact ·
-Time to Contact · Power · Blast Factor.
+Hitting is logged **one swing at a time**, and every session average is calculated from those
+swings — so the averages can never drift away from the underlying data.
+
+In the log form, the Hitting section gives you:
+
+- **ADD SWING** — appends a new numbered line
+- **REPEAT LAST** — copies the previous swing's numbers into a new line, for when only one metric
+  changed
+- **SHOW CORE 5 / SHOW ALL 11** — start with Bat Speed, Hand Speed, On Plane, Attack Angle, and
+  Vertical Bat Angle; expand when you want the full Blast set
+- A live **AVG** row under the table that recalculates as you type, plus swings logged, average
+  bat speed, and hardest swing
+
+Leave a box blank if Blast didn't report it. Blanks are **skipped**, not counted as zero — if
+On Plane came through on 8 of 12 swings, the average is over those 8, and the app shows `8 of 12`
+under the value.
+
+Two separate bests are tracked: **best session average** (what goals measure against) and
+**hardest swing** (the fastest single swing ever). Both fire their own NEW BEST celebration.
+
+Fields match the Blast Baseball app labels: Bat Speed · Peak Hand Speed · On Plane Efficiency ·
+Attack Angle · Vertical Bat Angle · Rotational Acceleration · Early Connection ·
+Connection at Impact · Time to Contact · Power · Blast Factor.
+
+---
+
+## Editing a player card
+
+Tap the pencil next to a player's name to change their **jersey number** and **slogan**
+("The Slugger"). Saves to Supabase, so it updates on every device. First name, division, and card
+colors live in `lib/players.ts`.
+
+---
+
+## Dates on charts
+
+Every chart is date-stamped:
+
+- **Pitching / Fielding / Hitting blocks** each carry a bar chart labeled *BY DATE*, with the
+  session date under each bar and the most recent one in white
+- **Progress Over Time** shows a date axis under the line, thinned to at most 7 labels so they
+  never overlap, plus a hover tooltip on each point
+- Each stat block header shows **Last: M/D**, and the Session Log table lists full dates
 
 ---
 
@@ -195,8 +238,9 @@ Time to Contact · Power · Blast Factor.
 npm run selftest
 ```
 
-25 checks covering rolling averages, goal progress, next-target suggestions, PR detection, XP math,
-and the level curve.
+41 checks covering rolling averages, goal progress, next-target suggestions, PR detection, XP math,
+the level curve, swing averaging (including blanks and negative angles), and player profile
+overrides.
 
 ---
 
@@ -204,7 +248,8 @@ and the level curve.
 
 | What | Where |
 |---|---|
-| Names, numbers, nicknames, colors | `lib/players.ts` |
+| Default names, numbers, slogans, colors | `lib/players.ts` |
+| Swing columns shown in Core vs All | `SWING_COLUMNS` in `lib/swings.ts` |
 | Goal metrics, increments, ceilings, defaults | `METRICS` in `lib/goals.ts` |
 | Rolling window size (default 5) | `ROLLING_WINDOW` in `lib/goals.ts` |
 | XP values, level curve, tiers | `lib/gamification.ts` |
@@ -225,6 +270,8 @@ app/
 components/
   PlayerCard.tsx        HUD, goals, charts, stat blocks, achievements
   GoalsPanel.tsx        Current Avg → Goal cards with inline editing
+  SwingLogger.tsx       swing-by-swing entry table with live averages
+  PlayerIdentityEditor.tsx  inline number + slogan editing
   ProgressOverTime.tsx  metric picker + line chart with goal line
   CelebrationModal.tsx  PRs, cleared goals, next-target picker
   LogSessionModal.tsx   session entry form
@@ -235,6 +282,7 @@ lib/
   players.ts            Carl & Austin
   gamification.ts       XP, levels, totals, streaks, awards, PR detection
   goals.ts              metric defs, rolling averages, goal progress, suggestions
+  swings.ts             swing columns, averaging, session rollup
   store.ts              Supabase ⇄ localStorage storage layer
   supabase.ts           client
   useAppData.ts         React hook tying it together

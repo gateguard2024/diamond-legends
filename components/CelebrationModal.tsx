@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Flame, PartyPopper, Sparkles, Target, Trophy } from 'lucide-react';
 import { MetricId, PersonalBest, Player } from '@/lib/types';
+import { displayName } from '@/lib/players';
 import { METRIC_BY_ID } from '@/lib/goals';
 import type { SaveResult } from '@/lib/useAppData';
 
@@ -42,7 +43,7 @@ export default function CelebrationModal({
           <h2 className="text-2xl font-black text-white tracking-tight">
             {hasGoals ? 'GOAL ACHIEVED!' : hasPBs ? 'NEW PERSONAL BEST!' : 'WORKOUT LOGGED'}
           </h2>
-          <p className="text-sky-300 text-sm font-medium mt-1">{player.nickname}</p>
+          <p className="text-sky-300 text-sm font-medium mt-1">{displayName(player)}</p>
 
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-300 text-slate-950 font-black px-4 py-2 rounded-full mt-4">
             <Sparkles className="w-4 h-4" />+{result.session.xpEarned} XP

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Goal, MetricId, PersonalBest, PlayerId, Session } from './types';
+import { Goal, MetricId, PersonalBest, Player, PlayerId, PlayerProfile, Session } from './types';
 import { bestsBefore, detectPersonalBests, xpForSession } from './gamification';
 import {
   METRICS,
@@ -14,14 +14,16 @@ import {
   createGoal,
   createSession,
   fetchGoals,
+  fetchProfiles,
   fetchSessions,
   newId,
   removeGoal,
   removeSession,
+  saveProfile,
   updateGoal,
   upsertSessions,
 } from './store';
-import { PLAYER_ORDER } from './players';
+import { PLAYERS, PLAYER_ORDER, applyProfiles } from './players';
 
 export interface SaveResult {
   session: Session;
@@ -32,14 +34,16 @@ export interface SaveResult {
 export function useAppData() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [profiles, setProfiles] = useState<PlayerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
-      const [s, g] = await Promise.all([fetchSessions(), fetchGoals()]);
+      const [s, g, p] = await Promise.all([fetchSessions(), fetchGoals(), fetchProfiles()]);
       setSessions(s);
       setGoals(g);
+      setProfiles(p);
       setError(null);
       return { sessions: s, goals: g };
     } catch (e) {
@@ -157,6 +161,25 @@ export function useAppData() {
     setGoals((prev) => prev.filter((g) => g.id !== id));
   }, []);
 
+  // -------------------------------------------------------------------------
+  // Player identity (jersey number + slogan)
+  // -------------------------------------------------------------------------
+
+  const players: Record<PlayerId, Player> = useMemo(() => applyProfiles(profiles), [profiles]);
+
+  const saveIdentity = useCallback(
+    async (playerId: PlayerId, patch: { number: number; slogan: string }) => {
+      const profile: PlayerProfile = {
+        playerId,
+        number: patch.number,
+        slogan: patch.slogan || PLAYERS[playerId].slogan,
+      };
+      setProfiles((prev) => [...prev.filter((p) => p.playerId !== playerId), profile]);
+      await saveProfile(profile);
+    },
+    [],
+  );
+
   const stats = useMemo(
     () => ({ sessionCount: sessions.length, goalCount: goals.filter((g) => !g.achievedAt).length }),
     [sessions, goals],
@@ -165,6 +188,7 @@ export function useAppData() {
   return {
     sessions,
     goals,
+    players,
     loading,
     error,
     stats,
@@ -175,6 +199,7 @@ export function useAppData() {
     importSessions,
     setGoal,
     clearGoal,
+    saveIdentity,
     reload,
   };
 }

@@ -98,6 +98,7 @@ export function emptyTotals(): CareerTotals {
     cleanPct: 0,
     swings: 0,
     bestBatSpeed: 0,
+    bestSwing: 0,
     bestOnPlane: 0,
     bestBlastFactor: 0,
     bestHandSpeed: 0,
@@ -122,6 +123,7 @@ export function computeTotals(sessions: Session[]): CareerTotals {
     if (s.hitting) {
       t.swings += s.hitting.swings;
       t.bestBatSpeed = Math.max(t.bestBatSpeed, s.hitting.batSpeed);
+      t.bestSwing = Math.max(t.bestSwing, s.hitting.bestSwingBatSpeed ?? s.hitting.batSpeed);
       t.bestOnPlane = Math.max(t.bestOnPlane, s.hitting.onPlaneEfficiency);
       t.bestBlastFactor = Math.max(t.bestBlastFactor, s.hitting.blastFactor);
       t.bestHandSpeed = Math.max(t.bestHandSpeed, s.hitting.peakHandSpeed);
@@ -332,6 +334,13 @@ export function detectPersonalBests(session: Session, priorSessions: Session[]):
   }
   if (session.hitting) {
     check('batSpeed', 'Bat Speed', session.hitting.batSpeed, prior.bestBatSpeed, 'mph');
+    check(
+      'bestSwing',
+      'Hardest Swing',
+      session.hitting.bestSwingBatSpeed,
+      prior.bestSwing,
+      'mph',
+    );
     check('peakHandSpeed', 'Hand Speed', session.hitting.peakHandSpeed, prior.bestHandSpeed, 'mph');
     check(
       'onPlaneEfficiency',

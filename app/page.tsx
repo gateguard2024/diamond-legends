@@ -6,7 +6,7 @@ import PlayerCard from '@/components/PlayerCard';
 import LogSessionModal from '@/components/LogSessionModal';
 import SessionHistory from '@/components/SessionHistory';
 import CelebrationModal from '@/components/CelebrationModal';
-import { PLAYERS, PLAYER_ORDER } from '@/lib/players';
+import { PLAYER_ORDER } from '@/lib/players';
 import { useAppData, SaveResult } from '@/lib/useAppData';
 import { levelFromXP, totalXP } from '@/lib/gamification';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -15,6 +15,7 @@ import { MetricId, PlayerId, Session } from '@/lib/types';
 export default function DiamondLegendsDashboard() {
   const {
     sessions,
+    players,
     loading,
     error,
     forPlayer,
@@ -23,6 +24,7 @@ export default function DiamondLegendsDashboard() {
     deleteSession,
     importSessions,
     setGoal,
+    saveIdentity,
   } = useAppData();
 
   const [logging, setLogging] = useState<PlayerId | null>(null);
@@ -62,7 +64,7 @@ export default function DiamondLegendsDashboard() {
   const handleSetGoal = async (playerId: PlayerId, metric: MetricId, target: number) => {
     try {
       await setGoal(playerId, metric, target);
-      flash(`${PLAYERS[playerId].name}'s new goal is locked in.`);
+      flash(`${players[playerId].name}'s new goal is locked in.`);
     } catch (e) {
       flash(e instanceof Error ? e.message : 'Could not save that goal.');
     }
@@ -131,7 +133,7 @@ export default function DiamondLegendsDashboard() {
           {leader && (
             <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-2 rounded-xl text-xs font-bold">
               <Trophy className="w-4 h-4" />
-              {leader.id ? `${PLAYERS[leader.id].name} leads` : 'Dead heat'} ·{' '}
+              {leader.id ? `${players[leader.id].name} leads` : 'Dead heat'} ·{' '}
               {leader.xp.toLocaleString()} XP
             </div>
           )}
@@ -184,11 +186,14 @@ export default function DiamondLegendsDashboard() {
             {PLAYER_ORDER.map((id) => (
               <PlayerCard
                 key={id}
-                player={PLAYERS[id]}
+                player={players[id]}
                 sessions={forPlayer(id)}
                 goals={goalsFor(id)}
                 onLog={() => setLogging(id)}
                 onSetGoal={(metric, target) => handleSetGoal(id, metric, target)}
+                onSaveIdentity={(patch) => {
+                  saveIdentity(id, patch).catch(() => flash('Could not save that change.'));
+                }}
               />
             ))}
           </main>
@@ -203,10 +208,10 @@ export default function DiamondLegendsDashboard() {
                   const lvl = levelFromXP(xp);
                   return (
                     <div key={id} className="flex items-center gap-3">
-                      <span className="w-16 text-xs font-black text-white">{PLAYERS[id].name}</span>
+                      <span className="w-16 text-xs font-black text-white">{players[id].name}</span>
                       <div className="flex-1 h-7 bg-slate-950 border border-slate-800 rounded-full overflow-hidden">
                         <div
-                          className={`h-full bg-gradient-to-r ${PLAYERS[id].accent.from} ${PLAYERS[id].accent.to} transition-all duration-700`}
+                          className={`h-full bg-gradient-to-r ${players[id].accent.from} ${players[id].accent.to} transition-all duration-700`}
                           style={{ width: `${(xp / max) * 100}%` }}
                         />
                       </div>
@@ -236,7 +241,7 @@ export default function DiamondLegendsDashboard() {
       {/* MODALS */}
       {logging && (
         <LogSessionModal
-          player={PLAYERS[logging]}
+          player={players[logging]}
           saving={saving}
           onClose={() => setLogging(null)}
           onSave={handleSave}
@@ -245,7 +250,7 @@ export default function DiamondLegendsDashboard() {
 
       {celebrating && (
         <CelebrationModal
-          player={PLAYERS[celebrating.playerId]}
+          player={players[celebrating.playerId]}
           result={celebrating.result}
           onSetNextGoal={(metric, target) => handleSetGoal(celebrating.playerId, metric, target)}
           onClose={() => setCelebrating(null)}

@@ -5,6 +5,7 @@ import { Award, Flame, PlusCircle, Shield, Star, Target, Zap } from 'lucide-reac
 import { Goal, MetricId, Player, Session } from '@/lib/types';
 import GoalsPanel from './GoalsPanel';
 import ProgressOverTime from './ProgressOverTime';
+import PlayerIdentityEditor from './PlayerIdentityEditor';
 import {
   BADGES,
   MILESTONES,
@@ -29,12 +30,14 @@ export default function PlayerCard({
   goals,
   onLog,
   onSetGoal,
+  onSaveIdentity,
 }: {
   player: Player;
   sessions: Session[];
   goals: Goal[];
   onLog: () => void;
   onSetGoal: (metric: MetricId, target: number) => void;
+  onSaveIdentity: (patch: { number: number; slogan: string }) => void;
 }) {
   const totals = useMemo(() => computeTotals(sessions), [sessions]);
   const xp = useMemo(() => totalXP(sessions), [sessions]);
@@ -61,6 +64,14 @@ export default function PlayerCard({
     .slice(-6)
     .map((s) => ({ label: shortDate(s.date), value: s.hitting!.batSpeed }));
 
+  const fieldingTrend = chrono
+    .filter((s) => s.fielding && fieldingRepTotal(s) > 0)
+    .slice(-6)
+    .map((s) => ({
+      label: shortDate(s.date),
+      value: Math.round((s.fielding!.cleanReps / fieldingRepTotal(s)) * 100),
+    }));
+
   const badges = evaluateAwards(BADGES, totals, sessions);
   const milestones = evaluateAwards(MILESTONES, totals, sessions);
   const xpPct = Math.min(100, (level.currentXP / level.xpToNextLevel) * 100);
@@ -74,7 +85,7 @@ export default function PlayerCard({
             className={`w-16 h-16 sm:w-20 sm:h-20 rounded-xl border-4 border-sky-700 bg-gradient-to-br ${player.accent.from} ${player.accent.to} flex items-center justify-center shadow-lg`}
           >
             <span className="text-2xl sm:text-3xl font-black text-slate-900">
-              {player.name.charAt(0)}
+              {player.name.charAt(0).toUpperCase()}
             </span>
           </div>
           <span className="absolute -top-2.5 -left-2.5 bg-gradient-to-br from-orange-500 to-yellow-400 text-black font-black text-[11px] px-2 py-0.5 rounded-full shadow-md">
@@ -83,10 +94,8 @@ export default function PlayerCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg sm:text-2xl font-extrabold text-white tracking-tight truncate">
-            {player.nickname}
-          </h2>
-          <p className="text-sky-300 text-xs sm:text-sm font-medium mb-2">
+          <PlayerIdentityEditor player={player} onSave={onSaveIdentity} />
+          <p className="text-sky-300 text-xs sm:text-sm font-medium mb-2 mt-0.5">
             {level.tier} · {player.division} · Age {player.age}
           </p>
           <div className="bg-slate-900 border border-slate-700 h-6 rounded-full p-0.5 w-full relative overflow-hidden">
@@ -189,7 +198,7 @@ export default function PlayerCard({
             </div>
             <BarTrend
               data={strikeTrend}
-              label="STRIKE % TREND"
+              label="STRIKE % BY DATE"
               format={(n) => `${n}%`}
             />
           </div>
@@ -219,6 +228,15 @@ export default function PlayerCard({
             <StatTile label="CAREER REPS" value={totals.fieldingReps.toLocaleString()} />
             <StatTile label="CLEAN %" value={totals.cleanPct} suffix="%" highlight />
           </div>
+          <div className="mt-2.5">
+            <BarTrend
+              data={fieldingTrend}
+              label="CLEAN FIELDING % BY DATE"
+              from="from-sky-600"
+              to="to-cyan-300"
+              format={(n) => `${n}%`}
+            />
+          </div>
         </SectionCard>
 
         {/* ---------------- HITTING (BLAST MOTION) ---------------- */}
@@ -244,12 +262,15 @@ export default function PlayerCard({
             <StatTile label="TIME TO CONTACT" value={lastHitting?.hitting?.timeToContact ?? 0} suffix="s" />
             <StatTile label="POWER (kW)" value={lastHitting?.hitting?.power ?? 0} />
             <StatTile label="BLAST FACTOR" value={lastHitting?.hitting?.blastFactor ?? 0} />
-            <StatTile label="BEST BAT SPEED" value={totals.bestBatSpeed} suffix="mph" highlight />
+            <StatTile label="SWINGS LOGGED" value={lastHitting?.hitting?.swings ?? 0} />
+            <StatTile label="CAREER SWINGS" value={totals.swings.toLocaleString()} />
+            <StatTile label="BEST SESSION AVG" value={totals.bestBatSpeed} suffix="mph" highlight />
+            <StatTile label="HARDEST SWING" value={totals.bestSwing} suffix="mph" highlight />
           </div>
           <div className="mt-2.5">
             <BarTrend
               data={batSpeedTrend}
-              label="BAT SPEED TREND (MPH)"
+              label="BAT SPEED (MPH) BY DATE"
               from="from-yellow-600"
               to="to-yellow-300"
               format={(n) => n.toFixed(1)}

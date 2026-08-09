@@ -7,7 +7,8 @@ export type PlayerId = 'carl' | 'austin';
 export interface Player {
   id: PlayerId;
   name: string;
-  nickname: string;
+  /** Editable nickname, e.g. "The Slugger". */
+  slogan: string;
   number: number;
   age: number;
   division: string; // "9U" / "10U"
@@ -19,6 +20,13 @@ export interface Player {
     border: string;
     ring: string;
   };
+}
+
+/** User-editable bits of a player, stored in the database. */
+export interface PlayerProfile {
+  playerId: PlayerId;
+  number: number;
+  slogan: string; // e.g. "The Slugger"
 }
 
 // --- Session sub-records --------------------------------------------------
@@ -41,15 +49,16 @@ export interface FieldingEntry {
 }
 
 /**
- * Blast Motion session averages. Field names match the labels shown in the
+ * One swing as reported by Blast Motion. Field names match the labels in the
  * Blast Baseball app so numbers can be copied straight across.
+ * Any metric left blank is stored as 0 and ignored when averaging.
  */
-export interface HittingEntry {
-  swings: number;
+export interface Swing {
+  id: string;
   batSpeed: number; // mph
   peakHandSpeed: number; // mph
   rotationalAcceleration: number; // g
-  onPlaneEfficiency: number; // % (Blast's "On Plane Efficiency" / plane score)
+  onPlaneEfficiency: number; // %
   attackAngle: number; // degrees
   verticalBatAngle: number; // degrees (normally negative)
   earlyConnection: number; // degrees
@@ -57,6 +66,31 @@ export interface HittingEntry {
   timeToContact: number; // seconds
   power: number; // kW
   blastFactor: number; // 0-100 composite
+}
+
+export type SwingMetric = Exclude<keyof Swing, 'id'>;
+
+/**
+ * Session-level hitting numbers. When `swingLog` is present every average
+ * here is derived from it, so the two never drift apart.
+ */
+export interface HittingEntry {
+  swings: number; // = swingLog.length when swings were logged individually
+  batSpeed: number; // mph
+  peakHandSpeed: number; // mph
+  rotationalAcceleration: number; // g
+  onPlaneEfficiency: number; // %
+  attackAngle: number; // degrees
+  verticalBatAngle: number; // degrees
+  earlyConnection: number; // degrees
+  connectionAtImpact: number; // degrees
+  timeToContact: number; // seconds
+  power: number; // kW
+  blastFactor: number; // 0-100 composite
+  /** Every swing taken in the session. */
+  swingLog?: Swing[];
+  /** Fastest single swing of the session. */
+  bestSwingBatSpeed?: number;
 }
 
 export interface Session {
@@ -109,7 +143,9 @@ export interface CareerTotals {
   cleanReps: number;
   cleanPct: number;
   swings: number;
-  bestBatSpeed: number;
+  bestBatSpeed: number; // best session average
+  bestSwing: number; // best single swing
+
   bestOnPlane: number;
   bestBlastFactor: number;
   bestHandSpeed: number;

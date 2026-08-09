@@ -4,7 +4,9 @@
  *   npx tsc lib/__selftest.ts --outDir /tmp/dltest --module commonjs \
  *     --target es2020 --esModuleInterop --skipLibCheck && node /tmp/dltest/lib/__selftest.js
  */
-import { Session } from './types';
+import { Session, Swing } from './types';
+import { averageMetric, bestMetric, emptySwing, hittingFromSwings, isSwingFilled } from './swings';
+import { applyProfiles, displayName } from './players';
 import { computeTotals, detectPersonalBests, levelFromXP, xpForSession } from './gamification';
 import {
   METRIC_BY_ID,
@@ -102,6 +104,66 @@ check('level 1 at 0 xp', levelFromXP(0).level, 1);
 check('level 2 at 100 xp', levelFromXP(100).level, 2);
 check('level 3 at 240 xp', levelFromXP(240).level, 3);
 check('xp remainder', levelFromXP(250).currentXP, 10);
+
+// ---------------------------------------------------------------------------
+// Swing-by-swing logging
+// ---------------------------------------------------------------------------
+
+const swing = (batSpeed: number, onPlane = 0, vba = 0): Swing => ({
+  ...emptySwing(`sw${batSpeed}-${onPlane}-${vba}`),
+  batSpeed,
+  onPlaneEfficiency: onPlane,
+  verticalBatAngle: vba,
+});
+
+const log: Swing[] = [swing(40, 70), swing(44, 0), swing(48, 80), emptySwing('blank')];
+
+check('blank swings are not counted', log.filter(isSwingFilled).length, 3);
+check('averages skip the blank swing', averageMetric(log.filter(isSwingFilled), 'batSpeed'), 44);
+// on-plane recorded on only 2 of 3 swings -> average of those 2, not divided by 3
+check('metric average ignores unrecorded values', averageMetric(log.filter(isSwingFilled), 'onPlaneEfficiency'), 75);
+check('best single swing', bestMetric(log.filter(isSwingFilled), 'batSpeed'), 48);
+
+const derived = hittingFromSwings(log);
+check('swing count from log', derived.swings, 3);
+check('session bat speed average', derived.batSpeed, 44);
+check('hardest swing recorded', derived.bestSwingBatSpeed, 48);
+check('unrecorded metric averages to 0', derived.power, 0);
+check('swing log is stored without blanks', derived.swingLog?.length, 3);
+
+// Negative values (vertical bat angle) survive averaging
+const vbaLog = [swing(40, 0, -30), swing(42, 0, -34)];
+check('negative angles average correctly', averageMetric(vbaLog, 'verticalBatAngle'), -32);
+
+// Hardest swing is a PR independent of the session average
+const swingSession: Session = {
+  id: 'sw1',
+  playerId: 'carl',
+  date: '2026-08-08',
+  hitting: hittingFromSwings([swing(30), swing(60)]),
+  xpEarned: 0,
+};
+const priorHit: Session = {
+  id: 'sw0',
+  playerId: 'carl',
+  date: '2026-08-07',
+  hitting: hittingFromSwings([swing(50), swing(50)]),
+  xpEarned: 0,
+};
+const swingPBs = detectPersonalBests(swingSession, [priorHit]).map((p) => p.metric);
+check('hardest swing is its own PR', swingPBs.includes('bestSwing'), true);
+check('session average is not a PR when it dropped', swingPBs.includes('batSpeed'), false);
+
+// ---------------------------------------------------------------------------
+// Player identity
+// ---------------------------------------------------------------------------
+
+const edited = applyProfiles([{ playerId: 'austin', number: 22, slogan: 'The Hammer' }]);
+check('profile overrides number', edited.austin.number, 22);
+check('profile overrides slogan', edited.austin.slogan, 'The Hammer');
+check('display name uses slogan', displayName(edited.austin), "AUSTIN 'THE HAMMER'");
+check('untouched player keeps defaults', edited.carl.number, 7);
+check('empty slogan falls back to plain name', displayName({ ...edited.carl, slogan: '' }), 'CARL');
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
 if (failures > 0 && typeof process !== 'undefined') process.exitCode = 1;

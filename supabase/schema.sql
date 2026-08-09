@@ -46,6 +46,18 @@ create unique index if not exists goals_one_active_per_metric
   where achieved_at is null;
 
 -- --------------------------------------------------------------------------
+-- PLAYER PROFILES
+--   The editable bits of a player card: jersey number and slogan.
+--   Names, colors and division live in lib/players.ts.
+-- --------------------------------------------------------------------------
+create table if not exists public.player_profiles (
+  player_id  text primary key,
+  number     integer     not null default 0,
+  slogan     text        not null default '',
+  updated_at timestamptz not null default now()
+);
+
+-- --------------------------------------------------------------------------
 -- ROW LEVEL SECURITY
 --
 -- This is a private family app with no login, so the anon key is allowed to
@@ -54,8 +66,9 @@ create unique index if not exists goals_one_active_per_metric
 -- If you later want a login, replace `true` with `auth.uid() is not null`
 -- and turn on Supabase Auth.
 -- --------------------------------------------------------------------------
-alter table public.sessions enable row level security;
-alter table public.goals    enable row level security;
+alter table public.sessions        enable row level security;
+alter table public.goals           enable row level security;
+alter table public.player_profiles enable row level security;
 
 drop policy if exists "family full access" on public.sessions;
 create policy "family full access" on public.sessions
@@ -63,4 +76,8 @@ create policy "family full access" on public.sessions
 
 drop policy if exists "family full access" on public.goals;
 create policy "family full access" on public.goals
+  for all using (true) with check (true);
+
+drop policy if exists "family full access" on public.player_profiles;
+create policy "family full access" on public.player_profiles
   for all using (true) with check (true);
