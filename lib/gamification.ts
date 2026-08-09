@@ -1,0 +1,293 @@
+import { AwardDef, CareerTotals, LevelInfo, Session, Tier } from './types';
+
+// ---------------------------------------------------------------------------
+// XP ENGINE
+// ---------------------------------------------------------------------------
+
+/**
+ * XP for a single logged session. Rewards volume first (a 9-year-old should
+ * get credit just for showing up and doing reps) and quality second.
+ */
+export function xpForSession(session: Session, priorBests: Partial<CareerTotals> = {}): number {
+  let xp = 20; // showing up
+  let phases = 0;
+
+  if (session.pitching && session.pitching.totalPitches > 0) {
+    phases++;
+    const p = session.pitching;
+    xp += p.totalPitches * 1;
+    xp += p.strikes * 2;
+    const pct = p.totalPitches ? (p.strikes / p.totalPitches) * 100 : 0;
+    if (p.totalPitches >= 20 && pct >= 60) xp += 25; // command bonus
+    if (priorBests.bestTopSpeed !== undefined && p.topSpeed > priorBests.bestTopSpeed) xp += 50; // velo PR
+  }
+
+  if (session.fielding) {
+    phases++;
+    const f = session.fielding;
+    const reps = fieldingRepTotal(session);
+    xp += reps * 2;
+    xp += Math.min(f.cleanReps, reps) * 1; // clean-rep bonus
+    if (reps >= 50) xp += 25; // grind bonus
+  }
+
+  if (session.hitting && session.hitting.swings > 0) {
+    phases++;
+    const h = session.hitting;
+    xp += h.swings * 1;
+    if (h.onPlaneEfficiency >= 70) xp += 25; // Blast plane bonus
+    if (priorBests.bestBatSpeed !== undefined && h.batSpeed > priorBests.bestBatSpeed) xp += 50; // bat speed PR
+  }
+
+  if (phases === 3) xp += 50; // full workout bonus
+
+  return Math.round(xp);
+}
+
+export function fieldingRepTotal(session: Session): number {
+  const f = session.fielding;
+  if (!f) return 0;
+  return (
+    f.popFlies + f.frontGrounders + f.backhand + f.gloveSide + f.gloveSideTurns + f.backhandTurns
+  );
+}
+
+/** XP required to clear a given level. Gets gently steeper. */
+export function xpForLevel(level: number): number {
+  return 100 + (level - 1) * 40;
+}
+
+export function levelFromXP(totalXP: number): LevelInfo {
+  let level = 1;
+  let remaining = Math.max(0, totalXP);
+  while (remaining >= xpForLevel(level) && level < 999) {
+    remaining -= xpForLevel(level);
+    level++;
+  }
+  return {
+    level,
+    tier: tierForLevel(level),
+    totalXP,
+    currentXP: remaining,
+    xpToNextLevel: xpForLevel(level),
+  };
+}
+
+export function tierForLevel(level: number): Tier {
+  if (level >= 40) return 'Hall of Famer';
+  if (level >= 25) return 'All-Star';
+  if (level >= 10) return 'Pro';
+  return 'Rookie';
+}
+
+// ---------------------------------------------------------------------------
+// CAREER AGGREGATION
+// ---------------------------------------------------------------------------
+
+export function emptyTotals(): CareerTotals {
+  return {
+    sessions: 0,
+    pitches: 0,
+    strikes: 0,
+    strikePct: 0,
+    bestTopSpeed: 0,
+    fieldingReps: 0,
+    cleanReps: 0,
+    cleanPct: 0,
+    swings: 0,
+    bestBatSpeed: 0,
+    bestOnPlane: 0,
+    bestBlastFactor: 0,
+    bestHandSpeed: 0,
+  };
+}
+
+export function computeTotals(sessions: Session[]): CareerTotals {
+  const t = emptyTotals();
+  t.sessions = sessions.length;
+
+  for (const s of sessions) {
+    if (s.pitching) {
+      t.pitches += s.pitching.totalPitches;
+      t.strikes += s.pitching.strikes;
+      t.bestTopSpeed = Math.max(t.bestTopSpeed, s.pitching.topSpeed);
+    }
+    if (s.fielding) {
+      t.fieldingReps += fieldingRepTotal(s);
+      t.cleanReps += s.fielding.cleanReps;
+    }
+    if (s.hitting) {
+      t.swings += s.hitting.swings;
+      t.bestBatSpeed = Math.max(t.bestBatSpeed, s.hitting.batSpeed);
+      t.bestOnPlane = Math.max(t.bestOnPlane, s.hitting.onPlaneEfficiency);
+      t.bestBlastFactor = Math.max(t.bestBlastFactor, s.hitting.blastFactor);
+      t.bestHandSpeed = Math.max(t.bestHandSpeed, s.hitting.peakHandSpeed);
+    }
+  }
+
+  t.strikePct = t.pitches ? Math.round((t.strikes / t.pitches) * 100) : 0;
+  t.cleanPct = t.fieldingReps ? Math.round((t.cleanReps / t.fieldingReps) * 100) : 0;
+  return t;
+}
+
+export function totalXP(sessions: Session[]): number {
+  return sessions.reduce((sum, s) => sum + (s.xpEarned || 0), 0);
+}
+
+/** Bests from every session EXCEPT the one being scored — used for PR bonuses. */
+export function bestsBefore(sessions: Session[], excludeId?: string): CareerTotals {
+  return computeTotals(sessions.filter((s) => s.id !== excludeId));
+}
+
+// ---------------------------------------------------------------------------
+// STREAKS
+// ---------------------------------------------------------------------------
+
+/** Consecutive calendar days (ending today or yesterday) with a logged session. */
+export function currentStreak(sessions: Session[], today = new Date()): number {
+  if (!sessions.length) return 0;
+  const days = new Set(sessions.map((s) => s.date));
+  const cursor = new Date(today);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+  // Allow the streak to still be "alive" if they haven't worked out yet today.
+  if (!days.has(iso(cursor))) cursor.setDate(cursor.getDate() - 1);
+
+  let streak = 0;
+  while (days.has(iso(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+/** Distinct days trained in the last 7 calendar days. */
+export function daysThisWeek(sessions: Session[], today = new Date()): number {
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - 6);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  return new Set(sessions.filter((s) => s.date >= cutoffIso).map((s) => s.date)).size;
+}
+
+// ---------------------------------------------------------------------------
+// BADGES (skill achievements) & MILESTONES (volume achievements)
+// ---------------------------------------------------------------------------
+
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+export const BADGES: AwardDef[] = [
+  {
+    id: 'STRIKE_SNIPER',
+    label: 'STRIKE ZONE SNIPER',
+    icon: '🎯',
+    description: 'Hit 65% strikes in a session of 25+ pitches',
+    progress: (_t, sessions) =>
+      clamp01(
+        Math.max(
+          0,
+          ...sessions.map((s) =>
+            s.pitching && s.pitching.totalPitches >= 25
+              ? s.pitching.strikes / s.pitching.totalPitches / 0.65
+              : 0,
+          ),
+        ),
+      ),
+  },
+  {
+    id: 'BAT_SPEED_DEMON',
+    label: 'BAT SPEED DEMON',
+    icon: '⚡',
+    description: 'Average 50 mph bat speed in a session',
+    progress: (t) => clamp01(t.bestBatSpeed / 50),
+  },
+  {
+    id: 'ON_PLANE',
+    label: 'ON-PLANE MACHINE',
+    icon: '📐',
+    description: '75% On Plane Efficiency (Blast)',
+    progress: (t) => clamp01(t.bestOnPlane / 75),
+  },
+  {
+    id: 'VACUUM',
+    label: 'THE VACUUM',
+    icon: '🧤',
+    description: '90% clean fielding reps across 200+ reps',
+    progress: (t) => clamp01(Math.min(t.cleanPct / 90, t.fieldingReps / 200)),
+  },
+  {
+    id: 'FLAMETHROWER',
+    label: 'FLAMETHROWER',
+    icon: '🔥',
+    description: 'Touch 50 mph on the gun',
+    progress: (t) => clamp01(t.bestTopSpeed / 50),
+  },
+  {
+    id: 'IRON_WORKER',
+    label: 'IRON WORKER',
+    icon: '🏗️',
+    description: 'Log 25 workouts',
+    progress: (t) => clamp01(t.sessions / 25),
+  },
+];
+
+export const MILESTONES: AwardDef[] = [
+  {
+    id: 'FIRST_REP',
+    label: 'First Workout',
+    icon: '🌱',
+    description: 'Log your very first session',
+    progress: (t) => clamp01(t.sessions / 1),
+  },
+  {
+    id: '250_PITCHES',
+    label: '250 Pitches',
+    icon: '⚾',
+    description: 'Throw 250 career pitches',
+    progress: (t) => clamp01(t.pitches / 250),
+  },
+  {
+    id: '250_STRIKES',
+    label: '250 Strikes',
+    icon: '🎯',
+    description: 'Throw 250 career strikes',
+    progress: (t) => clamp01(t.strikes / 250),
+  },
+  {
+    id: '500_REPS',
+    label: '500 Rep Club',
+    icon: '🧤',
+    description: '500 career fielding reps',
+    progress: (t) => clamp01(t.fieldingReps / 500),
+  },
+  {
+    id: '1000_SWINGS',
+    label: '1,000 Swings',
+    icon: '🏏',
+    description: '1,000 career Blast-tracked swings',
+    progress: (t) => clamp01(t.swings / 1000),
+  },
+  {
+    id: 'BLAST_75',
+    label: 'Blast Factor 75',
+    icon: '💥',
+    description: 'Post a 75 Blast Factor',
+    progress: (t) => clamp01(t.bestBlastFactor / 75),
+  },
+];
+
+export interface AwardStatus {
+  def: AwardDef;
+  progress: number;
+  unlocked: boolean;
+}
+
+export function evaluateAwards(
+  defs: AwardDef[],
+  totals: CareerTotals,
+  sessions: Session[],
+): AwardStatus[] {
+  return defs.map((def) => {
+    const progress = clamp01(def.progress(totals, sessions) || 0);
+    return { def, progress, unlocked: progress >= 1 };
+  });
+}
