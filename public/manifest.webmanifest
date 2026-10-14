@@ -1,0 +1,9 @@
+{
+  "name": "Diamond Legends — Elite Baseball Trainer",
+  "short_name": "Diamond Legends",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0E1A2B",
+  "theme_color": "#0E1A2B",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -1,263 +1,174 @@
 'use client';
+import { ReactNode, useEffect } from 'react';
 
-import React from 'react';
+export function Card({ children, className = '', accent }: { children: ReactNode; className?: string; accent?: boolean }) {
+  return (
+    <section className={`rounded-2xl border ${accent ? 'border-amber bg-raised' : 'border-line bg-panel'} p-4 ${className}`}>{children}</section>
+  );
+}
 
-export function SectionCard({
-  title,
-  icon,
-  accentText = 'text-sky-300',
+export function Eyebrow({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`font-display text-[13px] uppercase tracking-[0.12em] text-muted ${className}`}>{children}</div>;
+}
+
+export function H1({ children }: { children: ReactNode }) {
+  return <h1 className="font-display text-[26px] font-semibold uppercase leading-tight tracking-wide sm:text-3xl">{children}</h1>;
+}
+
+export function Bar({ pct, color = '#F4B23E', h = 8 }: { pct: number; color?: string; h?: number }) {
+  const w = Math.max(0, Math.min(100, Math.round(pct * 100)));
+  return (
+    <div className="w-full overflow-hidden rounded-full bg-ink" style={{ height: h }} role="progressbar" aria-valuenow={w} aria-valuemin={0} aria-valuemax={100}>
+      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${w}%`, background: color }} />
+    </div>
+  );
+}
+
+export function Button({
   children,
-  right,
+  onClick,
+  kind = 'primary',
+  className = '',
+  type = 'button',
+  disabled,
 }: {
-  title: string;
-  icon: React.ReactNode;
-  accentText?: string;
-  children: React.ReactNode;
-  right?: React.ReactNode;
+  children: ReactNode;
+  onClick?: () => void;
+  kind?: 'primary' | 'ghost' | 'quiet' | 'danger';
+  className?: string;
+  type?: 'button' | 'submit';
+  disabled?: boolean;
 }) {
+  const styles = {
+    primary: 'bg-amber text-ink font-semibold hover:bg-amber-soft',
+    ghost: 'border border-amber text-amber hover:bg-amber/10',
+    quiet: 'border border-line text-chalk hover:bg-raised',
+    danger: 'border border-warn text-warn hover:bg-warn/10',
+  }[kind];
   return (
-    <div className="p-4 sm:p-5 bg-sky-950/40 rounded-2xl border border-sky-900">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className={`text-sm sm:text-base font-bold ${accentText} flex items-center gap-2`}>
-          {icon}
-          {title}
-        </h3>
-        {right}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-export function StatTile({
-  label,
-  value,
-  suffix,
-  highlight = false,
-  span = false,
-}: {
-  label: string;
-  value: number | string;
-  suffix?: string;
-  highlight?: boolean;
-  span?: boolean;
-}) {
-  return (
-    <div
-      className={[
-        'bg-sky-950 border p-2.5 rounded-lg text-center',
-        highlight ? 'border-amber-500/60 shadow-[0_0_18px_-6px] shadow-amber-500/60' : 'border-sky-800',
-        span ? 'col-span-2' : '',
-      ].join(' ')}
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`min-h-[44px] rounded-xl px-4 text-[15px] transition-colors disabled:opacity-40 ${styles} ${className}`}
     >
-      <div className="text-xl sm:text-2xl font-black text-white leading-none">
-        {value}
-        {suffix ? <span className="text-sm text-sky-400 font-bold ml-0.5">{suffix}</span> : null}
-      </div>
-      <div className="text-[9px] sm:text-[10px] text-sky-500 font-bold tracking-wider mt-1.5 leading-tight">
-        {label}
-      </div>
-    </div>
+      {children}
+    </button>
   );
 }
 
-/** Simple bar chart. Values are normalized against the max in the set. */
-export function BarTrend({
-  data,
-  label,
-  from = 'from-orange-600',
-  to = 'to-amber-300',
-  format = (n: number) => String(Math.round(n)),
-}: {
-  data: { label: string; value: number }[];
-  label: string;
-  from?: string;
-  to?: string;
-  format?: (n: number) => string;
-}) {
-  const max = Math.max(1, ...data.map((d) => d.value));
+export function Pill({ children, color }: { children: ReactNode; color: string }) {
   return (
-    <div className="bg-sky-950 p-3 rounded-lg border border-sky-800 flex flex-col">
-      <div className="text-[10px] text-sky-500 font-bold mb-2 tracking-wider">{label}</div>
-      {data.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-[11px] text-sky-700 py-4">
-          No sessions logged yet
+    <span className="whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold" style={{ color, borderColor: color }}>
+      {children}
+    </span>
+  );
+}
+
+/** Bottom sheet on phones, centered dialog on larger screens. */
+export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={title}>
+      <button aria-label="Close" className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative max-h-[88vh] w-full overflow-y-auto rounded-t-3xl border border-line bg-panel p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:max-w-lg sm:rounded-3xl">
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line sm:hidden" />
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 className="font-display text-xl font-semibold uppercase tracking-wide">{title}</h2>
+          <button onClick={onClose} className="grid h-11 w-11 place-items-center rounded-full text-muted hover:bg-raised" aria-label="Close">
+            <Icon name="x" />
+          </button>
         </div>
-      ) : (
-        <>
-          <div className="flex items-end gap-1.5 h-24">
-            {data.map((d, i) => (
-              <div
-                key={i}
-                title={`${d.label} — ${format(d.value)}`}
-                className="flex-1 flex flex-col justify-end h-full group relative"
-              >
-                <div className="text-[9px] text-sky-400 font-bold text-center mb-1">
-                  {format(d.value)}
-                </div>
-                <div
-                  className={`w-full bg-gradient-to-t ${from} ${to} rounded-t-md transition-all duration-500 min-h-[3px]`}
-                  style={{ height: `${Math.max(4, (d.value / max) * 100)}%` }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-1.5 mt-1.5 pt-1 border-t border-sky-900/60">
-            {data.map((d, i) => (
-              <div
-                key={i}
-                className={`flex-1 text-[9px] font-bold text-center ${
-                  i === data.length - 1 ? 'text-white' : 'text-sky-600'
-                }`}
-              >
-                {d.label}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/**
- * Compact SVG line chart with an optional dashed target line.
- * Renders "progress over time" for a single metric.
- */
-export function LineChart({
-  points,
-  target,
-  stroke = '#38bdf8',
-  fill = 'rgba(56,189,248,0.18)',
-  decimals = 0,
-  unit = '',
-  height = 150,
-}: {
-  points: { label: string; value: number }[];
-  target?: number | null;
-  stroke?: string;
-  fill?: string;
-  decimals?: number;
-  unit?: string;
-  height?: number;
-}) {
-  if (points.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center text-xs text-sky-700 border border-dashed border-sky-900 rounded-xl"
-        style={{ height }}
-      >
-        No data yet — log a session to start the chart
-      </div>
-    );
-  }
-
-  const W = 320;
-  const H = height;
-  const padX = 6;
-  const padY = 14;
-
-  const values = points.map((p) => p.value);
-  const candidates = target != null ? [...values, target] : values;
-  let min = Math.min(...candidates);
-  let max = Math.max(...candidates);
-  if (max === min) {
-    max = max + 1;
-    min = min - 1;
-  }
-  const range = max - min;
-  min -= range * 0.12;
-  max += range * 0.12;
-
-  const x = (i: number) =>
-    points.length === 1 ? W / 2 : padX + (i / (points.length - 1)) * (W - padX * 2);
-  const y = (v: number) => padY + (1 - (v - min) / (max - min)) * (H - padY * 2);
-
-  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(p.value)}`).join(' ');
-  const area = `${line} L ${x(points.length - 1)} ${H - padY} L ${x(0)} ${H - padY} Z`;
-  const last = points[points.length - 1];
-
-  return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height }} preserveAspectRatio="none">
-        {points.length > 1 && <path d={area} fill={fill} />}
-        <path d={line} fill="none" stroke={stroke} strokeWidth={2.5} strokeLinejoin="round" />
-        {target != null && (
-          <line
-            x1={0}
-            x2={W}
-            y1={y(target)}
-            y2={y(target)}
-            stroke="#fbbf24"
-            strokeWidth={1.5}
-            strokeDasharray="5 4"
-          />
-        )}
-        {points.map((p, i) => (
-          <circle
-            key={i}
-            cx={x(i)}
-            cy={y(p.value)}
-            r={i === points.length - 1 ? 4 : 2.5}
-            fill={i === points.length - 1 ? '#fff' : stroke}
-            stroke={stroke}
-            strokeWidth={1.5}
-          >
-            <title>{`${p.label}: ${p.value.toFixed(decimals)}${unit}`}</title>
-          </circle>
-        ))}
-      </svg>
-
-      {/* Date axis — thinned out so labels never collide */}
-      <div className="flex mt-1.5">
-        {points.map((p, i) => {
-          const stride = Math.ceil(points.length / 7);
-          const show = i === 0 || i === points.length - 1 || i % stride === 0;
-          return (
-            <div
-              key={i}
-              className="flex-1 text-center"
-              title={`${p.label} — ${p.value.toFixed(decimals)}${unit}`}
-            >
-              <span
-                className={`text-[9px] font-bold ${
-                  i === points.length - 1 ? 'text-white' : 'text-sky-600'
-                } ${show ? '' : 'invisible'}`}
-              >
-                {p.label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="flex justify-between items-center mt-1 pt-1.5 border-t border-sky-900/60">
-        <span className="text-[10px] text-sky-600 font-bold">
-          {points.length} session{points.length === 1 ? '' : 's'}
-        </span>
-        {target != null && (
-          <span className="text-[10px] text-amber-400 font-bold">
-            — — goal {target.toFixed(decimals)}
-            {unit}
-          </span>
-        )}
-        <span className="text-[10px] text-white font-bold">
-          {last.label}: {last.value.toFixed(decimals)}
-          {unit}
-        </span>
+        {children}
       </div>
     </div>
   );
 }
 
-export function ProgressRing({ progress }: { progress: number }) {
-  const pct = Math.round(progress * 100);
+type IconName = 'home' | 'calendar' | 'stopwatch' | 'chart' | 'star' | 'menu' | 'x' | 'check' | 'flame' | 'chevL' | 'chevR' | 'plus' | 'arm' | 'move' | 'trash' | 'ball' | 'book';
+
+export function Icon({ name, size = 22, className = '' }: { name: IconName; size?: number; className?: string }) {
+  const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  const paths: Record<IconName, ReactNode> = {
+    home: <path {...p} d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" />,
+    calendar: (
+      <>
+        <rect {...p} x="3.5" y="5" width="17" height="15" rx="2.5" />
+        <path {...p} d="M3.5 10h17M8 3v4M16 3v4" />
+      </>
+    ),
+    stopwatch: (
+      <>
+        <circle {...p} cx="12" cy="13.5" r="7" />
+        <path {...p} d="M12 13.5V10M10 3h4M18 6.5l1.5-1.5" />
+      </>
+    ),
+    chart: <path {...p} d="M4 19V10M10 19V5M16 19v-6M2 20h20" />,
+    star: <path {...p} d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z" />,
+    menu: <path {...p} d="M4 7h16M4 12h16M4 17h16" />,
+    x: <path {...p} d="M6 6l12 12M18 6L6 18" />,
+    check: <path {...p} d="M5 12.5l4.5 4.5L19 7.5" />,
+    flame: <path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-4-1-7 1-10z" fill="currentColor" />,
+    chevL: <path {...p} d="M15 5l-7 7 7 7" />,
+    chevR: <path {...p} d="M9 5l7 7-7 7" />,
+    plus: <path {...p} d="M12 5v14M5 12h14" />,
+    arm: <path {...p} d="M4 18c3-1 5-3 6-6l2-5c.5-1.5 2.5-1.5 3 0l1 3 3 1c1.5.5 1.5 2.5 0 3l-5 2" />,
+    move: <path {...p} d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" />,
+    trash: <path {...p} d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />,
+    ball: (
+      <>
+        <circle {...p} cx="12" cy="12" r="8.5" />
+        <path {...p} d="M8 5c2 4 2 10 0 14M16 5c-2 4-2 10 0 14" />
+      </>
+    ),
+    book: <path {...p} d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5" />,
+  };
   return (
-    <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden mt-1.5">
-      <div
-        className="h-full bg-gradient-to-r from-sky-500 to-cyan-300 rounded-full"
-        style={{ width: `${pct}%` }}
-      />
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className={className}>
+      {paths[name]}
+    </svg>
+  );
+}
+
+export function Toast({ text, onDone }: { text: string | null; onDone: () => void }) {
+  useEffect(() => {
+    if (!text) return;
+    const t = setTimeout(onDone, 2200);
+    return () => clearTimeout(t);
+  }, [text, onDone]);
+  if (!text) return null;
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(88px+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 sm:bottom-8" role="status" aria-live="polite">
+      <div className="animate-pop rounded-full bg-amber px-5 py-3 font-display text-lg font-semibold uppercase tracking-wide text-ink shadow-lg">{text}</div>
     </div>
+  );
+}
+
+export function Sparkline({ values, lowerIsBetter, color = '#F4B23E' }: { values: number[]; lowerIsBetter?: boolean; color?: string }) {
+  if (values.length < 2) return null;
+  const w = 120;
+  const h = 32;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * (w - 4) + 2;
+    const n = (v - min) / span;
+    const y = lowerIsBetter ? 4 + n * (h - 8) : h - 4 - n * (h - 8);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Trend">
+      <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={pts[pts.length - 1].split(',')[0]} cy={pts[pts.length - 1].split(',')[1]} r="3" fill={color} />
+    </svg>
   );
 }

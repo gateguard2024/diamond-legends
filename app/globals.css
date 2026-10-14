@@ -2,18 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-html,
-body {
-  background-color: #020617;
+html {
+  -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  background: #0e1a2b;
 }
 
-/* Kill the ugly number-input spinners on the log form */
-input[type='number']::-webkit-outer-spin-button,
-input[type='number']::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+body {
+  overscroll-behavior-y: none;
 }
-input[type='number'] {
-  -moz-appearance: textfield;
+
+input,
+select,
+textarea {
+  /* 16px+ keeps iOS from zooming into fields */
+  font-size: 16px;
+}
+
+:focus-visible {
+  outline: 2px solid #f4b23e;
+  outline-offset: 2px;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
 }

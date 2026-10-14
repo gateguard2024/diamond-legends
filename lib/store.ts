@@ -1,269 +1,181 @@
-import { Goal, MetricId, PlayerId, PlayerProfile, Session } from './types';
-import { getSupabase, isSupabaseConfigured } from './supabase';
-
+'use client';
 // ---------------------------------------------------------------------------
-// Storage layer.
-//
-// Two interchangeable backends behind one API:
-//   • Supabase  — used when NEXT_PUBLIC_SUPABASE_* env vars exist. Shared
-//                 across every device.
-//   • localStorage — automatic fallback so the app still works before
-//                 Supabase is configured (and offline).
+// One generic record table, two interchangeable backends:
+//   • Supabase (when NEXT_PUBLIC_SUPABASE_* env vars exist) — shared by every device
+//   • localStorage — automatic fallback so the app works before Supabase is set up
 // ---------------------------------------------------------------------------
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const SESSION_KEY = 'diamond-legends:sessions:v1';
-const GOAL_KEY = 'diamond-legends:goals:v1';
-const PROFILE_KEY = 'diamond-legends:profiles:v1';
+export type RecordKind =
+  | 'test' // a combine/test result: { metric, value }
+  | 'slot' // a planned training slot: { weekStart, day, type, players, note? }
+  | 'done' // a completed slot/drill check: { slotId?, type, drills?, xp }
+  | 'pitches' // pitches thrown: { count, innings?, context }
+  | 'goal' // goal override: { metric, value }
+  | 'cue' // coach cue: { coach, text }
+  | 'award' // coach's pick badge: { reason }
+  | 'sleep' // 9+ hours: {}
+  | 'gear' // equipment owned: { gearId, owned }
+  | 'settings'; // { tryoutDate }
 
-export const backendName = () => (isSupabaseConfigured ? 'Supabase' : 'this device');
+export interface Rec<T = Record<string, unknown>> {
+  id: string;
+  kind: RecordKind;
+  playerId: string | null;
+  date: string; // YYYY-MM-DD
+  data: T;
+  createdAt: string;
+}
 
-function readLocal<T>(key: string): T[] {
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export const isSynced = Boolean(url && key);
+const TABLE = 'ebt_records';
+const LOCAL_KEY = 'ebt:records:v1';
+
+let client: SupabaseClient | null = null;
+function sb() {
+  if (!isSynced) return null;
+  if (!client) client = createClient(url as string, key as string, { auth: { persistSession: false } });
+  return client;
+}
+
+export const newId = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `id_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+function readLocal(): Rec[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? (parsed as T[]) : [];
+    const raw = window.localStorage.getItem(LOCAL_KEY);
+    const rows = raw ? JSON.parse(raw) : [];
+    return Array.isArray(rows) ? rows : [];
   } catch {
     return [];
   }
 }
 
-function writeLocal<T>(key: string, rows: T[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(key, JSON.stringify(rows));
+function writeLocal(rows: Rec[]) {
+  try {
+    window.localStorage.setItem(LOCAL_KEY, JSON.stringify(rows));
+  } catch {
+    /* storage full or blocked — data stays in memory for this visit */
+  }
 }
-
-function newId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `id_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-const byDateDesc = (a: Session, b: Session) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
-
-// --- row <-> object mapping -------------------------------------------------
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const sessionFromRow = (r: any): Session => ({
+const fromRow = (r: any): Rec => ({
   id: r.id,
+  kind: r.kind,
   playerId: r.player_id,
-  date: typeof r.date === 'string' ? r.date.slice(0, 10) : r.date,
-  pitching: r.pitching ?? undefined,
-  fielding: r.fielding ?? undefined,
-  hitting: r.hitting ?? undefined,
-  notes: r.notes ?? undefined,
-  xpEarned: r.xp_earned ?? 0,
-});
-
-const sessionToRow = (s: Session) => ({
-  id: s.id,
-  player_id: s.playerId,
-  date: s.date,
-  pitching: s.pitching ?? null,
-  fielding: s.fielding ?? null,
-  hitting: s.hitting ?? null,
-  notes: s.notes ?? null,
-  xp_earned: s.xpEarned,
-});
-
-const goalFromRow = (r: any): Goal => ({
-  id: r.id,
-  playerId: r.player_id,
-  metric: r.metric,
-  target: Number(r.target),
-  startValue: Number(r.start_value ?? 0),
+  date: String(r.date).slice(0, 10),
+  data: r.data ?? {},
   createdAt: r.created_at,
-  achievedAt: r.achieved_at ?? null,
-  achievedValue: r.achieved_value === null || r.achieved_value === undefined ? null : Number(r.achieved_value),
 });
+const toRow = (r: Rec) => ({ id: r.id, kind: r.kind, player_id: r.playerId, date: r.date, data: r.data, created_at: r.createdAt });
 
-const goalToRow = (g: Goal) => ({
-  id: g.id,
-  player_id: g.playerId,
-  metric: g.metric,
-  target: g.target,
-  start_value: g.startValue,
-  created_at: g.createdAt,
-  achieved_at: g.achievedAt ?? null,
-  achieved_value: g.achievedValue ?? null,
-});
-/* eslint-enable @typescript-eslint/no-explicit-any */
+// --- in-memory cache + subscribers -------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// SESSIONS
-// ---------------------------------------------------------------------------
+let cache: Rec[] = [];
+let loaded = false;
+let loading: Promise<void> | null = null;
+const listeners = new Set<() => void>();
+let lastError: string | null = null;
 
-export async function fetchSessions(): Promise<Session[]> {
-  const sb = getSupabase();
-  if (!sb) return readLocal<Session>(SESSION_KEY).sort(byDateDesc);
+const emit = () => listeners.forEach((fn) => fn());
 
-  const { data, error } = await sb
-    .from('sessions')
-    .select('*')
-    .order('date', { ascending: false })
-    .order('created_at', { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(sessionFromRow);
+export function subscribe(fn: () => void) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
 }
 
-export async function createSession(session: Session): Promise<Session> {
-  const sb = getSupabase();
-  if (!sb) {
-    const rows = readLocal<Session>(SESSION_KEY);
-    const next = [...rows, session].sort(byDateDesc);
-    writeLocal(SESSION_KEY, next);
-    return session;
-  }
+export const getRecords = () => cache;
+export const isLoaded = () => loaded;
+export const getError = () => lastError;
 
-  const { data, error } = await sb.from('sessions').insert(sessionToRow(session)).select().single();
-  if (error) throw new Error(error.message);
-  return sessionFromRow(data);
+export async function load(force = false) {
+  if (loading && !force) return loading;
+  loading = (async () => {
+    const c = sb();
+    if (c) {
+      const { data, error } = await c.from(TABLE).select('*').order('date', { ascending: true }).limit(10000);
+      if (error) {
+        lastError = error.message;
+        cache = readLocal();
+      } else {
+        lastError = null;
+        cache = (data ?? []).map(fromRow);
+      }
+    } else {
+      cache = readLocal();
+    }
+    loaded = true;
+    emit();
+  })();
+  return loading;
 }
 
-export async function removeSession(id: string): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) {
-    writeLocal(
-      SESSION_KEY,
-      readLocal<Session>(SESSION_KEY).filter((s) => s.id !== id),
-    );
-    return;
-  }
-  const { error } = await sb.from('sessions').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+export async function addRecord<T extends Record<string, unknown>>(kind: RecordKind, playerId: string | null, date: string, data: T) {
+  const rec: Rec = { id: newId(), kind, playerId, date, data, createdAt: new Date().toISOString() };
+  cache = [...cache, rec];
+  emit();
+  const c = sb();
+  if (c) {
+    const { error } = await c.from(TABLE).insert(toRow(rec));
+    if (error) lastError = error.message;
+  } else writeLocal(cache);
+  return rec;
 }
 
-export async function upsertSessions(sessions: Session[]): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) {
-    const byId = new Map(readLocal<Session>(SESSION_KEY).map((s) => [s.id, s]));
-    for (const s of sessions) byId.set(s.id, s);
-    writeLocal(SESSION_KEY, Array.from(byId.values()).sort(byDateDesc));
-    return;
-  }
-  const { error } = await sb.from('sessions').upsert(sessions.map(sessionToRow));
-  if (error) throw new Error(error.message);
+export async function updateRecord(id: string, patch: Partial<Pick<Rec, 'date' | 'data' | 'playerId'>>) {
+  cache = cache.map((r) => (r.id === id ? { ...r, ...patch, data: patch.data ?? r.data } : r));
+  emit();
+  const c = sb();
+  const rec = cache.find((r) => r.id === id);
+  if (!rec) return;
+  if (c) {
+    const { error } = await c.from(TABLE).update({ date: rec.date, data: rec.data, player_id: rec.playerId }).eq('id', id);
+    if (error) lastError = error.message;
+  } else writeLocal(cache);
 }
 
-// ---------------------------------------------------------------------------
-// GOALS
-// ---------------------------------------------------------------------------
-
-export async function fetchGoals(): Promise<Goal[]> {
-  const sb = getSupabase();
-  if (!sb) return readLocal<Goal>(GOAL_KEY);
-
-  const { data, error } = await sb
-    .from('goals')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(goalFromRow);
+export async function removeRecord(id: string) {
+  cache = cache.filter((r) => r.id !== id);
+  emit();
+  const c = sb();
+  if (c) {
+    const { error } = await c.from(TABLE).delete().eq('id', id);
+    if (error) lastError = error.message;
+  } else writeLocal(cache);
 }
 
-export async function createGoal(input: {
-  playerId: PlayerId;
-  metric: MetricId;
-  target: number;
-  startValue: number;
-}): Promise<Goal> {
-  const goal: Goal = {
-    id: newId(),
-    playerId: input.playerId,
-    metric: input.metric,
-    target: input.target,
-    startValue: input.startValue,
-    createdAt: new Date().toISOString(),
-    achievedAt: null,
-    achievedValue: null,
-  };
-
-  const sb = getSupabase();
-  if (!sb) {
-    writeLocal(GOAL_KEY, [...readLocal<Goal>(GOAL_KEY), goal]);
-    return goal;
-  }
-
-  const { data, error } = await sb.from('goals').insert(goalToRow(goal)).select().single();
-  if (error) throw new Error(error.message);
-  return goalFromRow(data);
+export async function addMany(recs: Omit<Rec, 'id' | 'createdAt'>[]) {
+  const full = recs.map((r) => ({ ...r, id: newId(), createdAt: new Date().toISOString() }));
+  cache = [...cache, ...full];
+  emit();
+  const c = sb();
+  if (c) {
+    const { error } = await c.from(TABLE).insert(full.map(toRow));
+    if (error) lastError = error.message;
+  } else writeLocal(cache);
 }
 
-export async function updateGoal(id: string, patch: Partial<Goal>): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) {
-    writeLocal(
-      GOAL_KEY,
-      readLocal<Goal>(GOAL_KEY).map((g) => (g.id === id ? { ...g, ...patch } : g)),
-    );
-    return;
-  }
-
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const row: any = {};
-  if (patch.target !== undefined) row.target = patch.target;
-  if (patch.startValue !== undefined) row.start_value = patch.startValue;
-  if (patch.achievedAt !== undefined) row.achieved_at = patch.achievedAt;
-  if (patch.achievedValue !== undefined) row.achieved_value = patch.achievedValue;
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-
-  const { error } = await sb.from('goals').update(row).eq('id', id);
-  if (error) throw new Error(error.message);
+export function exportJson() {
+  return JSON.stringify({ app: 'diamond-legends', version: 2, exportedAt: new Date().toISOString(), records: cache }, null, 2);
 }
 
-export async function removeGoal(id: string): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) {
-    writeLocal(
-      GOAL_KEY,
-      readLocal<Goal>(GOAL_KEY).filter((g) => g.id !== id),
-    );
-    return;
-  }
-  const { error } = await sb.from('goals').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+export async function importJson(text: string) {
+  const parsed = JSON.parse(text);
+  const rows: Rec[] = Array.isArray(parsed?.records) ? parsed.records : [];
+  const known = new Set(cache.map((r) => r.id));
+  const fresh = rows.filter((r) => r && r.id && r.kind && !known.has(r.id));
+  cache = [...cache, ...fresh];
+  emit();
+  const c = sb();
+  if (c && fresh.length) {
+    const { error } = await c.from(TABLE).insert(fresh.map(toRow));
+    if (error) lastError = error.message;
+  } else writeLocal(cache);
+  return fresh.length;
 }
-
-// ---------------------------------------------------------------------------
-// PLAYER PROFILES (jersey number + slogan)
-// ---------------------------------------------------------------------------
-
-export async function fetchProfiles(): Promise<PlayerProfile[]> {
-  const sb = getSupabase();
-  if (!sb) return readLocal<PlayerProfile>(PROFILE_KEY);
-
-  const { data, error } = await sb.from('player_profiles').select('*');
-  if (error) throw new Error(error.message);
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  return (data ?? []).map((r: any) => ({
-    playerId: r.player_id,
-    number: Number(r.number ?? 0),
-    slogan: r.slogan ?? '',
-  }));
-}
-
-export async function saveProfile(profile: PlayerProfile): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) {
-    const rows = readLocal<PlayerProfile>(PROFILE_KEY).filter(
-      (p) => p.playerId !== profile.playerId,
-    );
-    writeLocal(PROFILE_KEY, [...rows, profile]);
-    return;
-  }
-
-  const { error } = await sb.from('player_profiles').upsert(
-    {
-      player_id: profile.playerId,
-      number: profile.number,
-      slogan: profile.slogan,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'player_id' },
-  );
-  if (error) throw new Error(error.message);
-}
-
-export { newId };

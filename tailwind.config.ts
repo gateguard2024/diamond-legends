@@ -1,28 +1,31 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  content: [
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './lib/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      colors: {
+        ink: '#0E1A2B',
+        panel: '#15243A',
+        raised: '#1B2D47',
+        line: '#2A3F5E',
+        chalk: '#EEF2F7',
+        muted: '#9FB0C7',
+        amber: { DEFAULT: '#F4B23E', soft: '#FFD27A' },
+        teal: '#4FC3B8',
+        solo: '#8DA2FF',
+        warn: '#F07B3F',
+        elite: '#FF8FA3',
+      },
+      fontFamily: {
+        display: ['Oswald', 'Impact', 'sans-serif'],
+        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+      },
       keyframes: {
-        popIn: {
-          '0%': { transform: 'scale(0.8)', opacity: '0' },
-          '60%': { transform: 'scale(1.05)', opacity: '1' },
-          '100%': { transform: 'scale(1)', opacity: '1' },
-        },
-        slideUp: {
-          '0%': { transform: 'translateY(12px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' },
-        },
+        pop: { '0%': { transform: 'scale(.85)', opacity: '0' }, '60%': { transform: 'scale(1.04)', opacity: '1' }, '100%': { transform: 'scale(1)' } },
       },
-      animation: {
-        popIn: 'popIn 350ms ease-out',
-        slideUp: 'slideUp 250ms ease-out',
-      },
+      animation: { pop: 'pop 300ms ease-out' },
     },
   },
   plugins: [],
